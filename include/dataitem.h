@@ -13,17 +13,19 @@ struct Submission {
     long                sbm_prob_id;
     Noj_Language        sbm_lang;
     long                sbm_id;
-    int                 sbm_judge_mode;
+    int                 sbm_judge_set;
+    Noj_Judge_Mode      sbm_cur_mode;
 
     std::string         sbm_source_file;
     std::string         sbm_binary_file;
 
     std::vector<Result> sbm_results;
-    Submission(long prob_id, Noj_Language lang, int mode, 
+    Submission(long prob_id, Noj_Language lang, int mode,
             std::string source_file, std::string binary_file):
         sbm_prob_id(prob_id),
         sbm_lang(lang),
-        sbm_judge_mode(mode),
+        sbm_judge_set(mode),
+        sbm_cur_mode(NojMode_UnSet),
         sbm_source_file(source_file),
         sbm_binary_file(binary_file) {}
     
@@ -41,8 +43,8 @@ struct Result {
     Noj_Result      res_type;
     Noj_Judge_Mode  res_judge_mode;
     std::string     res_content;
-    long            res_elapsed_time;
-    long            res_max_memory;
+    time_t            res_elapsed_time;
+    unsigned long            res_max_memory;
     Time            res_judge_time;
 
     Result(long sbm_id, Noj_Language lang, Noj_Judge_Mode judge_mode):
@@ -85,6 +87,7 @@ struct TestCase {
     long            tc_prob_id;
     std::string     tc_input_file;
     std::string     tc_output_file;
+    int             is_special_judge;
 
     TestCase(long prob_id, std::string input, std::string output):
         tc_prob_id(prob_id),
@@ -94,9 +97,19 @@ struct TestCase {
     ~TestCase() {}
 };
 
+struct ResourceLimit {
+    unsigned long       memory_limit;     //KB
+    time_t              time_limit;       //ms
+    unsigned long       file_limit;       //KB
+
+    const char          *work_dir;
+    int                 syscall_limits[512];
+};
+
 struct Problem {
     long                    prob_id;
     std::vector<TestCase>   prob_testcases;
+    ResourceLimit           prob_rsc_lim;
     
     void clear_testcases() {
         this->prob_testcases.clear();
@@ -116,18 +129,12 @@ struct Problem {
 };
 
 
-struct ResourceLimit {
-    unsigned long memory_limit;     //MB
-    unsigned long time_limit;       //ms
-    unsigned long file_limit;       //MB
-
-};
 
 class Compiler {
 
 private:
-    static Result compile_c_release(Submission submit, ResourceLimit rl);
-    static Result compile_cpp(Submission submit, ResourceLimit rl);
+
+    static char *get_script_path(Submission submit);
 
 public:
     static Result compile(Submission submit, ResourceLimit rl);
@@ -137,15 +144,18 @@ public:
 class Launcher {
 
 private:
-    static Result launch_c_release(Submission submit, ResourceLimit rl);
+    static char *get_script_path(Submission submit);
+
+    static Result launch_c_or_cpp(Submission submit, ResourceLimit rl);
 
 public:
     static Result launch(Submission submit, ResourceLimit rl);
 };
 
 class Checker {
+
 public:
-    static Result check(TestCase tc);
+    static Result check(Submission submit, TestCase tc);
 };
 
 class NetworkManager {
@@ -154,12 +164,21 @@ class NetworkManager {
 
 class JudgeManager {
 private:
+    static JudgeManager *m_instance;
+    char *work_dir;
     std::queue<Submission>      jm_sbm_lists;
     std::map<long, Problem>     jm_prob_lists;
     std::map<long, TestCase>    jm_tc_lists;
 
     std::queue<Result>          jm_res_lists;
+    JudgeManager(); 
+
 public:
+    ~JudgeManager();
+
+    static JudgeManager *get_instance();
+
+    const char *    get_main_dir();
     Noj_State       fetch_submission_from_db();
     Noj_State       fetch_problem_from_db();
     Noj_State       fetch_testcase_from_db();
@@ -173,8 +192,10 @@ public:
     Noj_State       add_result_to_list(Result res);
 };
 
+
 class Judge {
 private:
+    //const char *work_dir;
 
 public:
     
