@@ -2,8 +2,8 @@
 
 if [ $# != 1 ]; then
     echo "USAGE: $0 source_file_name"
-    echo $#
-    echo $1
+    #echo $#
+    #echo $1
     exit 50
 fi
 

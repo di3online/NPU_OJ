@@ -8,12 +8,10 @@ WorkThread::run()
     while (this->m_is_terminated != true) {
         WorkTask *p_task 
             = ThreadPoolManager::get_instance()->get_sbm();
-        p_task->run();
-        
+        p_task->run(); 
     }
 
     Log::d("Thread terminates", "WorkThread");
-
     pthread_exit(NULL);
     return ;
 }

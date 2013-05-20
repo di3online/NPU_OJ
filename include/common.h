@@ -1,7 +1,7 @@
 #ifndef NOJ_COMMON_INCLUDE
 #define NOJ_COMMON_INCLUDE
 
-const long BUFFER_SIZE = 1024;
+const long BUFFER_SIZE = 512;
 
 enum _Noj_Mode {
 
@@ -39,12 +39,18 @@ enum Noj_Result {
     NojRes_Abort,
     NojRes_RunPass,
     NojRes_WrongAnswer,
+    NojRes_PresentationError,
     NojRes_CorrectAnswer,
-    NojRes_Accept
+    NojRes_Accept,
+    NojRes_NotAccept
 };
 
 enum Noj_State {
+    Noj_ServerError,
     Noj_DBError,
+    Noj_SQLQueryFail,
+    Noj_SQLQueryNothing,
+    Noj_FileNotDownload,
     Noj_Normal
 };
 

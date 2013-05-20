@@ -11,30 +11,25 @@
 #include "../include/common.h"
 #include "../include/dataitem.h"
 
+
 void set_resource_limit(ResourceLimit rl)
 {
     struct rlimit lim;
-    if (rl.time_limit != 0) {
-        lim.rlim_max = rl.time_limit * 3 / 2 / 1000 + 1;
-        lim.rlim_cur = rl.time_limit / 1000 + 1;
-        fprintf(stderr, "set max time %lu\n", lim.rlim_max);
-        fprintf(stderr, "set cur time %lu\n", lim.rlim_cur);
+    if (rl.time_limit.is_set()) {
+        lim.rlim_max = rl.time_limit.get_second() * 3 / 2 + 1;
+        lim.rlim_cur = rl.time_limit.get_second() + 1;
         setrlimit(RLIMIT_CPU, &lim);
     }
 
-    if (rl.memory_limit != 0) {
-        lim.rlim_max = rl.memory_limit * 1024 + 4 * 1024 * 1024;
-        lim.rlim_cur = rl.memory_limit * 1024 + 4 * 1024 * 1024;
-        fprintf(stderr, "set max memory %lu\n", lim.rlim_max);
-        fprintf(stderr, "set cur memory %lu\n", lim.rlim_cur);
+    if (rl.memory_limit.is_set()) {
+        lim.rlim_max = rl.memory_limit.get_Byte() + 4 * 1024 * 1024;
+        lim.rlim_cur = rl.memory_limit.get_Byte() + 4 * 1024 * 1024;
         setrlimit(RLIMIT_AS, &lim);
     }
 
-    if (rl.file_limit != 0) {
-        lim.rlim_max = rl.file_limit * 1024 + 1024;
-        lim.rlim_cur = rl.file_limit * 1024;
-        fprintf(stderr, "set max file %lu\n", lim.rlim_max);
-        fprintf(stderr, "set cur file %lu\n", lim.rlim_cur);
+    if (rl.file_limit.is_set()) {
+        lim.rlim_max = rl.file_limit.get_Byte();
+        lim.rlim_cur = rl.file_limit.get_Byte();
         setrlimit(RLIMIT_FSIZE, &lim);
     }
 
@@ -58,11 +53,10 @@ Compiler::get_script_path(Submission submit)
         return NULL;
     }
 
-    char *script_path = (char *) malloc(strlen(root_dir) + strlen(file) + 2);
+    char *script_path = (char *) malloc(strlen(root_dir) + strlen(file) + 3);
 
     assert(script_path != NULL);
     sprintf(script_path, "%s/%s", root_dir, file);
-    //std::cout << script_path << std::endl;
 
     return script_path;
 }
@@ -97,6 +91,9 @@ Compiler::compile(Submission submit, ResourceLimit rl)
         res.res_content = "Compile fork error";
     } else if (pid == 0) {
         //Child progress
+        extern bool g_is_child;
+        g_is_child = true;
+        chdir(rl.work_dir);
 
         close(fd[0]);
         dup2(fd[1], STDERR_FILENO);
@@ -108,6 +105,8 @@ Compiler::compile(Submission submit, ResourceLimit rl)
                 compile_script_path,
                 submit.sbm_source_file.c_str(), 
                 (void *) NULL);
+
+        exit(1);
 
     } else {
 
@@ -133,8 +132,7 @@ Compiler::compile(Submission submit, ResourceLimit rl)
     if (compile_script_path != NULL) {
         free(compile_script_path);
     }
+
     return res;
 }
-
-
 
