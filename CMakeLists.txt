@@ -36,7 +36,7 @@ install(DIRECTORY scripts
         GROUP_EXECUTE GROUP_READ)
 
 install(FILES conf/noj.conf
-    DESTINATION ${MAINROOT}/conf
+    DESTINATION /etc/noj.conf
     PERMISSIONS OWNER_READ OWNER_WRITE 
     GROUP_READ GROUP_WRITE)
 

@@ -11,6 +11,7 @@
 #include "../include/debug.h"
 #include "../include/common.h"
 #include "../include/dataitem.h"
+#include "../include/daemon.h"
 
 bool g_is_child = false;
 
@@ -140,6 +141,8 @@ int main()
         fprintf(stderr, "NOJ must run as root\n");
         exit(1);
     }
+
+    daemon_run();
 
     while (1){
         sleep(1);
