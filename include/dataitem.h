@@ -448,7 +448,7 @@ private:
 public:
     ~NetworkManager();
 
-    Noj_State fetch_file(const char *ftp_loc, const char *local_dir);
+    Noj_State fetch_file(const char *server_path, const char *local_dir);
     int init_ftp_setting(const char *ip,
             const char *user, const char *passwd);
     int init_sftp_setting(const char *ip, 

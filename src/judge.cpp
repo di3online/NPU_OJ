@@ -228,7 +228,7 @@ Noj_State NetworkManager::fetch_file_from_sftp(const char *ftp_loc,
         }
     }
 
-    return Noj_Normal;
+    return stat;
 }
 
 const char *JudgeManager::get_testcase_dir()

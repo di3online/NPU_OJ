@@ -1,5 +1,9 @@
 project(NPU_OJ)
+set(MAINROOT noj)
 cmake_minimum_required(VERSION 2.8)
+
+message(STATUS "${CMAKE_INSTALL_PREFIX}")
+message(STATUS "PROJECT_BINARY_DIR ${PROJECT_BINARY_DIR}")
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_SOURCE_DIR}/cmake)
 set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -O0 -Wall --pipe -ggdb")
@@ -24,3 +28,15 @@ if (NOT DIFF)
 endif(NOT DIFF)
 
 add_subdirectory(src bin)
+
+install(DIRECTORY scripts 
+    DESTINATION ${MAINROOT}
+    PATTERN "scripts/*"
+    PERMISSIONS OWNER_EXECUTE OWNER_WRITE OWNER_READ 
+        GROUP_EXECUTE GROUP_READ)
+
+install(FILES conf/noj.conf
+    DESTINATION ${MAINROOT}/conf
+    PERMISSIONS OWNER_READ OWNER_WRITE 
+    GROUP_READ GROUP_WRITE)
+

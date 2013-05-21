@@ -14,7 +14,6 @@
 
 bool g_is_child = false;
 
-
 void test_compile(Result res)
 {
     if (res.res_type == NojRes_CompilePass) {
@@ -137,12 +136,14 @@ void terminate_NOJ()
 
 int main()
 {
+    if (geteuid() != 0) {
+        fprintf(stderr, "NOJ must run as root\n");
+        exit(1);
+    }
 
-    //if (geteuid() != 0) {
-    //    fprintf(stderr, "NOJ must run as root\n");
-    //    exit(1);
-    //}
-
+    while (1){
+        sleep(1);
+    }
     FILE *ferr = fopen("nojerr.log", "a+");
     if (ferr == NULL) {
         fprintf(stderr, "Log file: %s/nojerr.log open failed.\n", 

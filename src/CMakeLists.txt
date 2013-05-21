@@ -5,3 +5,6 @@ target_link_libraries(noj
     ${MYSQL_LIBRARY}
     ${Threads_LIBRARY}
 )
+
+install(TARGETS noj
+    DESTINATION ${MAINROOT}/bin)
