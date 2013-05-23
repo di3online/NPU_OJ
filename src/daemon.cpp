@@ -44,7 +44,8 @@ lock_file(int fd)
     fk.l_start = 0;
     fk.l_whence = SEEK_SET;
     fk.l_len = 0;
-    return fcntl(fd, F_SETLKW, &fk);
+    //F_SETLKW will wait but F_SETLK will quit
+    return fcntl(fd, F_SETLK, &fk);
 }
 
 int daemon_run()

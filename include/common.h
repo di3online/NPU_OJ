@@ -51,6 +51,7 @@ enum Noj_State {
     Noj_SQLQueryFail,
     Noj_SQLQueryNothing,
     Noj_FileNotDownload,
+    Noj_PermissionError,
     Noj_Normal
 };
 

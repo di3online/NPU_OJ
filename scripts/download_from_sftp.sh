@@ -1,15 +1,14 @@
 #!/bin/bash
-if [ $# != 5 ]; then
-    echo "USAGE: $0 remotefile local user host id_file"
-    echo $#
+if [ $# != 6 ]; then
+    echo "USAGE: $0 remotefile local user host port id_file"
     exit 50
 fi
 
-if [ ! -r $5 ]; then
+if [ ! -r $6 ]; then
     exit 2
 fi
 
-sftp -i $5 $3@$host <<END_SFTP
+sftp -i $6 -P $5 -o StrictHostKeyChecking=no $3@$4 <<END_SFTP
 get $1 $2
 bye
 END_SFTP
@@ -25,3 +24,5 @@ else
         exit 1;
     fi
 fi
+
+exit 0

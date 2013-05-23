@@ -1,10 +1,68 @@
 #include <stdlib.h>
 #include <unistd.h>
+#include <string.h>
 #include <stdio.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <dirent.h>
+#include <unistd.h>
+#include <pwd.h>
 
 #include "../include/common.h"
 #include "../include/dataitem.h"
 #include "../include/debug.h"
+#include "../include/db.h"
+#include "../include/judge.h"
+#include "../include/config.h"
+#include "../include/threadpool.h"
+
+#define DEFAULT_DIR_MODE (S_IRWXU | S_IRGRP | S_IXGRP)
+
+void 
+Judge::init_work_dir() 
+{
+    struct passwd *user_info;
+    user_info = getpwnam("judge");
+
+    uid_t owner = user_info->pw_uid;
+    gid_t group = user_info->pw_gid;
+
+    if (user_info == NULL) {
+        Log::e("Cannot find user judge, please check installation", 
+                "JudgeManager");
+        exit(EXIT_FAILURE);
+    }
+
+    DIR *dir = NULL;
+    if ((dir = opendir(this->work_dir)) == NULL) {
+        int ret = mkdir(this->work_dir, DEFAULT_DIR_MODE);
+        if (ret != 0) {
+            Log::e("Cannot mkdir workdir", "JudgeManager");
+            exit(EXIT_FAILURE);
+        }
+    } else {
+        closedir(dir);
+    }
+
+    chown(this->work_dir, owner, group);
+}
+
+Judge::Judge(unsigned int id)
+{
+
+    size_t size = 
+        strlen(JudgeManager::get_instance()->get_main_dir()) 
+            + strlen("/judge") + 5; 
+    
+    this->work_dir = (char *) malloc(size);
+    
+    snprintf(this->work_dir, size - 1, 
+            "%s%s%u", 
+            JudgeManager::get_instance()->get_main_dir(),
+            "/judge", 
+            id);
+
+}
 
 JudgeManager *JudgeManager::m_instance = NULL;
 
@@ -19,11 +77,12 @@ JudgeManager *JudgeManager::get_instance()
 
 JudgeManager::JudgeManager() 
 {
-    this->work_dir = get_current_dir_name();
+    this->work_dir = NULL;
 }
 
 JudgeManager::~JudgeManager() 
 {
+    this->destroy_judges();
     if (this->work_dir) {
         free(this->work_dir);
     }
@@ -35,12 +94,168 @@ JudgeManager::get_main_dir()
     return this->work_dir;
 }
 
+int
+JudgeManager::init_workdir(const char *path)
+{
+    char buf_path[BUFFER_SIZE];
+    struct passwd *user_info;
+    user_info = getpwnam("noj");
+    uid_t owner;
+    gid_t group;
+
+    if (user_info == NULL) {
+        Log::e("Cannot find user noj, please check installation", 
+                "JudgeManager");
+        exit(EXIT_FAILURE);
+    } else {
+        owner = user_info->pw_uid;
+        group = user_info->pw_gid;
+    }
+
+    snprintf(buf_path, sizeof(buf_path) - 1,
+            "%s", path);
+
+    DIR *dir = NULL;
+    if ((dir = opendir(buf_path)) == NULL) {
+        int ret = mkdir(buf_path, DEFAULT_DIR_MODE);
+        if (ret != 0) {
+            Log::e("Cannot mkdir workdir", "JudgeManager");
+            exit(EXIT_FAILURE);
+        }
+    } else {
+        closedir(dir);
+    }
+
+    chown(buf_path, owner, group);
+
+    free(this->work_dir);
+    this->work_dir = (char *) malloc(strlen(buf_path) + 1);
+    strncpy(this->work_dir, buf_path, strlen(buf_path) + 1);
+
+    snprintf(buf_path, sizeof(buf_path) - 1,
+            "%s/data", path);
+    if ((dir = opendir(buf_path)) == NULL) {
+        int ret = mkdir(buf_path, DEFAULT_DIR_MODE);
+        if (ret != 0) {
+            Log::e("Cannot mkdir workdir", "JudgeManager");
+            exit(EXIT_FAILURE);
+        }
+    } else {
+        closedir(dir);
+    }
+    chown(buf_path, owner, group);
+    
+    snprintf(buf_path, sizeof(buf_path) - 1,
+            "%s/src", path);
+    if ((dir = opendir(buf_path)) == NULL) {
+        int ret = mkdir(buf_path, DEFAULT_DIR_MODE);
+        if (ret != 0) {
+            Log::e("Cannot mkdir workdir", "JudgeManager");
+            exit(EXIT_FAILURE);
+        }
+    } else {
+        closedir(dir);
+    }
+    chown(buf_path, owner, group);
+
+    snprintf(buf_path, sizeof(buf_path) - 1,
+            "%s/output", path);
+    if ((dir = opendir(buf_path)) == NULL) {
+        int ret = mkdir(buf_path, DEFAULT_DIR_MODE);
+        if (ret != 0) {
+            Log::e("Cannot mkdir workdir", "JudgeManager");
+            exit(EXIT_FAILURE);
+        }
+    } else {
+        closedir(dir);
+    }
+    chown(buf_path, owner, group);
+    return 0;
+}
+
+int 
+JudgeManager::init_judges()
+{
+    this->init_workdir("/home/noj");
+    this->jm_judges_num = 
+        (unsigned int) ConfigManager::get_instance()->get_ulong("JUDGES_NUM");
+
+    this->jm_judges = (Judge **) malloc(sizeof(Judge *) * this->jm_judges_num);
+    this->jm_judges_flag = (enum JudgeState *) 
+        malloc(sizeof(enum JudgeState) * this->jm_judges_num);
+    
+    for (unsigned int i = 0; i < this->jm_judges_num; ++i) {
+        this->jm_judges[i] = new Judge(i);
+        this->jm_judges_flag[i] = JS_Available;
+        this->jm_judges[i]->init_work_dir();
+    }
+
+    ThreadPoolManager::get_instance()->init_workthreads(this->jm_judges_num);
+    pthread_mutex_init(&this->jm_lock, NULL);
+    sem_init(&this->jm_sem, 0, this->jm_judges_num);
+    
+    return 0;
+}
+
+int JudgeManager::destroy_judges()
+{
+    ThreadPoolManager::get_instance()->pool_destroy();
+    for (unsigned int i = 0; i < this->jm_judges_num; ++i) {
+        delete this->jm_judges[i];
+    }
+
+    delete this->jm_judges;
+    this->jm_judges = NULL;
+    delete this->jm_judges_flag;
+    this->jm_judges_flag = NULL;
+
+    pthread_mutex_destroy(&this->jm_lock);
+    sem_destroy(&this->jm_sem);
+
+    return 0;
+}
+
+Judge *
+JudgeManager::get_judge()
+{
+    sem_wait(&this->jm_sem);
+    pthread_mutex_lock(&this->jm_lock);   
+    Judge *jdg = NULL;
+    for (unsigned int i = 0; i < this->jm_judges_num; ++i) {
+        if (this->jm_judges_flag[i] == JS_Available) {
+            jdg = this->jm_judges[i];
+            this->jm_judges_flag[i] = JS_Used;
+            break;
+        }
+    }
+    pthread_mutex_unlock(&this->jm_lock);
+    
+    return jdg;
+}
+
+void
+JudgeManager::release_judge(Judge *jdg)
+{
+    pthread_mutex_lock(&this->jm_lock);
+    for (unsigned int i = 0; i < this->jm_judges_num; ++i) {
+        if (this->jm_judges[i] == jdg) {
+            this->jm_judges_flag[i] = JS_Available;
+            break;
+        }
+    }
+
+    pthread_mutex_unlock(&this->jm_lock);
+    sem_post(&this->jm_sem);
+    return ;
+}
+
+
 Noj_State JudgeManager::fetch_problem_from_db( Problem::ID prob_id)
 {
     Problem prob;
 
     //Hint: It's no need to escape the string, because the input is reliable.
-    MYSQL *db_con = DBConnMgr::get_available_connection( );
+    MYSQL *db_con = DBConnMgr::get_instance()->get_available_connection( );
     
     char sqlcmd[BUFFER_SIZE];
     snprintf( sqlcmd, sizeof( sqlcmd), 
@@ -70,7 +285,7 @@ Noj_State JudgeManager::fetch_problem_from_db( Problem::ID prob_id)
     }
 
     snprintf( sqlcmd, sizeof( sqlcmd),
-            "SELECT tc_id, tc_input, tc_output FROM TestCase WHERE Problem_pbm_id = %ld",
+        "SELECT tc_id, tc_input, tc_output FROM TestCase WHERE Problem_pbm_id = %ld",
             prob_id);
     ret = mysql_real_query( db_con, sqlcmd, strlen( sqlcmd));
 
@@ -81,6 +296,7 @@ Noj_State JudgeManager::fetch_problem_from_db( Problem::ID prob_id)
         MYSQL_RES *res = mysql_store_result( db_con);
         if ( res) {
             MYSQL_ROW row;
+            pthread_mutex_lock(&this->jm_lock);
             while ( ( row = mysql_fetch_row( res))) {
                 TestCase::ID id = strtoul( row[0], NULL, 10);
                 TestCase tc( id, prob_id);
@@ -91,6 +307,7 @@ Noj_State JudgeManager::fetch_problem_from_db( Problem::ID prob_id)
                 prob.add_testcase(tc);
             }
             this->jm_prob_lists[prob_id] = prob;
+            pthread_mutex_unlock(&this->jm_lock);
             mysql_free_result( res);
         } else {
             Log::e( "SQL select testcase info but gets nothing", "JudgeManager");
@@ -98,138 +315,11 @@ Noj_State JudgeManager::fetch_problem_from_db( Problem::ID prob_id)
         }
     }
 
-    DBConnMgr::return_connection( db_con);
+    DBConnMgr::get_instance()->release_connection( db_con);
     return Noj_Normal;
     
 }
 
-NetworkManager *NetworkManager::s_instance = NULL;
-
-NetworkManager::NetworkManager():
-    m_mode(NetMode_NoMode)
-{
-    memset(m_host, 0, sizeof(m_host));
-    memset(m_id_file, 0, sizeof(m_id_file));
-    memset(m_username, 0, sizeof(m_username));
-    memset(m_passwd, 0, sizeof(m_passwd));
-    memset(m_script_file, 0, sizeof(m_script_file));
-}
-
-int NetworkManager::init_ftp_setting(const char *ftp_host, 
-        const char *user, const char *passwd)
-{
-    this->m_mode = NetMode_FTP;
-    strncpy(this->m_host, ftp_host, sizeof(this->m_host) - 1);
-    strncpy(this->m_username, user, sizeof(this->m_username) - 1);
-    strncpy(this->m_passwd, passwd, sizeof(this->m_passwd) - 1);
-    return 0;
-}
-
-int NetworkManager::init_sftp_setting(const char *sftp_host,
-        const char *user, const char *id_file)
-{
-    this->m_mode = NetMode_SFTP;
-    strncpy(this->m_host, sftp_host, sizeof(this->m_host) - 1);
-    strncpy(this->m_username, user, sizeof(this->m_username) - 1);
-    strncpy(this->m_id_file, id_file, sizeof(this->m_id_file) - 1);
-    return 0;
-}
-
-int NetworkManager::set_ftp_cmd_script(const char *ftp_script)
-{
-    if (ftp_script == NULL) {
-        //TODO: set default script path
-    } else {
-        strncpy(this->m_script_file, ftp_script, 
-                sizeof(this->m_script_file) - 1);
-    }
-
-    return 0;
-}
-
-
-NetworkManager *NetworkManager::get_instance()
-{
-    if (NetworkManager::s_instance == NULL) {
-        NetworkManager::s_instance = new NetworkManager();
-    }
-
-    return NetworkManager::s_instance;
-}
-
-Noj_State NetworkManager::fetch_file(
-        const char *server_path, const char *local_dir)
-{
-    if (this->m_mode == NetMode_FTP) {
-        return this->fetch_file_from_ftp(server_path, local_dir);
-    } else if (this->m_mode == NetMode_SFTP){
-        return this->fetch_file_from_sftp(server_path, local_dir);
-    } else {
-        Log::e("Server Mode not match", "NetworkManager");
-        return Noj_ServerError;
-    }
-}
-
-
-Noj_State NetworkManager::fetch_file_from_ftp(const char *ftp_loc, 
-        const char *local_dir)
-{
-    char ftp_cmd[BUFFER_SIZE];
-    ftp_cmd[BUFFER_SIZE - 1] = '\0';
-    snprintf(ftp_cmd, sizeof(ftp_cmd) - 1, 
-            "su - judge -c \"%s %s %s %s %s %s\" 1>/dev/null 2>&1", 
-            this->m_script_file, 
-            this->m_host,
-            this->m_username, 
-            this->m_passwd,
-            ftp_loc, 
-            local_dir);
-    
-    int ret = system(ftp_cmd);
-    Noj_State stat = Noj_Normal;
-    if (0 != ret) {
-        switch (ret) {
-            case 1:
-                stat = Noj_FileNotDownload;
-                break;
-            default:
-
-                break;
-        }
-    }
-
-    return stat;
-}
-
-Noj_State NetworkManager::fetch_file_from_sftp(const char *ftp_loc, 
-        const char *local_dir)
-{
-    
-    char ftp_cmd[BUFFER_SIZE];
-    ftp_cmd[BUFFER_SIZE - 1] = '\0';
-    snprintf(ftp_cmd, sizeof(ftp_cmd) - 1, 
-            "su - judge -c \"%s %s %s %s %s %s\" 1>/dev/null 2>&1", 
-            this->m_script_file, 
-            this->m_host,
-            this->m_username, 
-            this->m_id_file,
-            ftp_loc, 
-            local_dir);
-    
-    int ret = system(ftp_cmd);
-    Noj_State stat = Noj_Normal;
-    if (0 != ret) {
-        switch (ret) {
-            case 1:
-                stat = Noj_FileNotDownload;
-                break;
-            default:
-                break;
-        }
-    }
-
-    return stat;
-}
 
 const char *JudgeManager::get_testcase_dir()
 {
@@ -237,20 +327,25 @@ const char *JudgeManager::get_testcase_dir()
         if (this->work_dir == NULL) {
             return NULL;
         }
-        this->testcase_dir = (char *) malloc(strlen(work_dir) 
-                + strlen("/testcases") + 2);
-        snprintf(this->testcase_dir, strlen(work_dir) + strlen("/testcases"), 
-                "%s/%s", this->work_dir, "/testcases");
+        this->testcase_dir = (char *) malloc(strlen(this->work_dir) 
+                + strlen("/data") + 2);
+        snprintf(this->testcase_dir, 
+                strlen(this->work_dir) + strlen("/data") + 1, 
+                "%s%s", 
+                this->work_dir, "/data");
     }    
 
-    return NULL;
+    return testcase_dir;
 }
 
 Noj_State JudgeManager::fetch_testcase_from_ftp( TestCase &tc)
 {
+    pthread_mutex_lock(&this->jm_lock);
     Noj_State stat = NetworkManager::get_instance()->fetch_file(
             tc.tc_remote_input_file.c_str(), 
             JudgeManager::get_testcase_dir());
+
+    pthread_mutex_unlock(&this->jm_lock);
 
     return stat;
 }
@@ -258,7 +353,18 @@ Noj_State JudgeManager::fetch_testcase_from_ftp( TestCase &tc)
 Problem 
 JudgeManager::get_problem(Problem::ID prob_id) 
 {
-    return this->jm_prob_lists[prob_id];
+    pthread_mutex_lock(&jm_lock);
+    if (this->jm_prob_lists.find(prob_id) 
+            == this->jm_prob_lists.end()) {
+        pthread_mutex_unlock(&this->jm_lock);
+        this->fetch_problem_from_db(prob_id);
+    }
+
+    pthread_mutex_lock(&jm_lock);
+    Problem prob = this->jm_prob_lists[prob_id];
+    pthread_mutex_unlock(&jm_lock);
+
+    return prob;
 }
 
 void
@@ -319,10 +425,6 @@ Judge::judge_sbm(Submission &submit)
 
 }
 
-void 
-Judge::init_work_dir() 
-{
-}
 
 void 
 Judge::copy_testcase_input(TestCase tc)
@@ -348,8 +450,10 @@ Judge::clear_work_dir()
     snprintf(command, sizeof(command) - 1, 
             "rm -rf %s/*", this->work_dir);
     
+    //TODO
     //int ret = system(command);
     //if (ret != 0) {
     //    printf("Judge: clear_work_dir error\n");
     //}
 }
+

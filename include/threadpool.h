@@ -44,25 +44,26 @@ public:
 class ThreadPoolManager {
 private:
     static ThreadPoolManager    *s_instance;
+
+    bool                        m_shutdown;
     std::queue<WorkTask *>      m_que_tasks;
     std::vector<WorkThread *>   m_vec_workthreads;
-    pthread_mutex_t             m_mutex;
+    pthread_mutex_t             m_queue_mutex;
+
+    pthread_cond_t              m_queue_ready;
 
     ThreadPoolManager() {
-        pthread_mutex_init(&this->m_mutex, NULL);
-
+        pthread_mutex_init(&this->m_queue_mutex, NULL);
+        pthread_cond_init(&m_queue_ready, NULL);
+        this->m_shutdown = true;
     }
 
-    ~ThreadPoolManager() {
-        for (size_t i = 0; i < m_vec_workthreads.size(); ++i) {
-            delete m_vec_workthreads[i];
-            m_vec_workthreads[i] = NULL;
-        }
-
-        pthread_mutex_destroy(&this->m_mutex);
-    }
 
 public:
+    ~ThreadPoolManager() {
+        this->pool_destroy();
+    }
+
     static ThreadPoolManager *get_instance() {
         if (s_instance == NULL) {
             s_instance = new ThreadPoolManager();
@@ -76,22 +77,38 @@ public:
             this->m_vec_workthreads.push_back(new_thread);
             new_thread->start();
         }
+
+        this->m_shutdown = false;
     }
 
+    bool is_shutdown();
+
+    void pool_destroy();
+
     WorkTask *get_sbm() {
-        pthread_mutex_lock(&this->m_mutex);
+        pthread_mutex_lock(&this->m_queue_mutex);
+
+        while (this->m_que_tasks.empty() && !this->m_shutdown) {
+            pthread_cond_wait(&this->m_queue_ready, &this->m_queue_mutex);
+        }
+
+        if (this->m_shutdown) {
+            pthread_mutex_unlock(&this->m_queue_mutex);
+            return NULL;
+        }
         
         WorkTask *p_task = this->m_que_tasks.front();
         this->m_que_tasks.pop();
 
-        pthread_mutex_unlock(&this->m_mutex);
+        pthread_mutex_unlock(&this->m_queue_mutex);
         return p_task;
     }
 
     void add_sbm(WorkTask *p_task) {
-        pthread_mutex_lock(&this->m_mutex);
+        pthread_mutex_lock(&this->m_queue_mutex);
         this->m_que_tasks.push(p_task);
-        pthread_mutex_unlock(&this->m_mutex);
+        pthread_mutex_unlock(&this->m_queue_mutex);
+        pthread_cond_signal(&this->m_queue_ready);
 
         return ;
     }

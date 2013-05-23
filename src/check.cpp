@@ -3,6 +3,7 @@
 #include "../include/common.h"
 #include "../include/dataitem.h"
 #include "../include/debug.h"
+#include "../include/judge.h"
 
 Result
 check_normal(Judge *p_jdg, Submission submit, TestCase tc)

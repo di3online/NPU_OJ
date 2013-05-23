@@ -21,6 +21,9 @@ public:
     static void d(const char *message,  const char *classname = "\0");
     static void e(const char *error,    const char *classname = "\0");
     static void w(const char *warning,  const char *classname = "\0");
+
+    static void init();
+    static void destroy();
     
 };
 #endif

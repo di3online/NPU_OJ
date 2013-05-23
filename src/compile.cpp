@@ -10,6 +10,7 @@
 
 #include "../include/common.h"
 #include "../include/dataitem.h"
+#include "../include/judge.h"
 
 
 void set_resource_limit(ResourceLimit rl)

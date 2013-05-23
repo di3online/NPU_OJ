@@ -85,7 +85,7 @@ get_proc_info(pid_t pid, const char *item)
     fscanf(file, "%ld", &ret);
 
     if (file) {
-        fclose(file);
+        pclose(file);
     }
 
     return ret;

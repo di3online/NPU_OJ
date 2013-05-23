@@ -9,8 +9,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include <mysql/mysql.h>
-
 #include "common.h"
 
 struct Result;
@@ -403,25 +401,6 @@ public:
     static Result check(Judge *p_jdg, Submission submit, TestCase tc);
 };
 
-class DBConnMgr {
-private:
-    enum DBConState{
-        DBCS_Init,
-        DBCS_Available,
-        DBCS_Used,
-        DBCS_Closed  
-    };
-    static const unsigned int       MAX_CONNECTIONS = 10;
-    static unsigned int             MAX_AVAILABLE_CONNECTIONS;
-    static MYSQL                    m_Connections[MAX_CONNECTIONS];
-    static DBConState               m_Conn_bits[MAX_CONNECTIONS];
-public:
-    static MYSQL *get_available_connection( );
-    static void return_connection( MYSQL *mysql_con);
-    static MYSQL *connect_db( MYSQL *mysql_con);
-    static void  init( );
-    static void  terminate( );
-};
 
 enum NetworkMode{
     NetMode_NoMode,
@@ -436,8 +415,10 @@ private:
     NetworkManager();
     enum NetworkMode m_mode;
     char m_host[64 + 1];
+    int  m_port;
     char m_id_file[128 + 1];
-    char m_script_file[128 + 1];
+    char m_down_script[128 + 1];
+    char m_up_script[128 + 1];
     char m_username[32 + 1];
     char m_passwd[32 + 1];
 
@@ -448,100 +429,18 @@ private:
 public:
     ~NetworkManager();
 
+    int init();
+
     Noj_State fetch_file(const char *server_path, const char *local_dir);
-    int init_ftp_setting(const char *ip,
+    int init_ftp_setting(const char *ip, int port,
             const char *user, const char *passwd);
-    int init_sftp_setting(const char *ip, 
+    int init_sftp_setting(const char *ip, int port,
             const char *user, const char *id_file);
 
-    int set_ftp_cmd_script(const char *ftp_script);
+    int set_ftp_cmd_script(const char *down_script, const char *up_script);
 
     static NetworkManager *get_instance();
 };
 
-class JudgeManager {
-private:
-    static JudgeManager *m_instance;
-    char *work_dir;
-    char *testcase_dir;
-    std::queue<Submission>              jm_sbm_lists;
-    std::map<Problem::ID, Problem>      jm_prob_lists;
-    std::map<TestCase::ID, TestCase>    jm_tc_lists;
-
-    std::queue<Result>                  jm_res_lists;
-    JudgeManager(); 
-    
-    const char *get_testcase_dir();
-public:
-    ~JudgeManager();
-
-    static JudgeManager *get_instance();
-
-    const char *    get_main_dir();
-    Noj_State       fetch_submission_from_db();
-    Noj_State       fetch_problem_from_db(Problem::ID);
-    Noj_State       fetch_testcase_from_db(TestCase::ID);
-    Noj_State       fetch_testcase_from_ftp( TestCase &tc);
-
-    Noj_State       update_results_to_db();
-    
-    Submission      get_submission();
-    Problem         get_problem(Problem::ID prob_id);
-    TestCase        get_testcase(TestCase::ID tc_id);
-
-    Noj_State       add_result_to_list(Result res);
-
-
-    //TODO: Remove at the release version
-    void            add_prob(Problem prob) {
-        this->jm_prob_lists.insert(
-                std::pair<Problem::ID, Problem>(prob.prob_id, prob));
-
-    }
-};
-
-
-class Judge {
-private:
-    char *work_dir;
-
-    
-
-public:
-    Judge():
-        work_dir(NULL) {}
-
-    Judge(const Judge &jdg) {
-        if (this != &jdg) {
-            if (jdg.work_dir) {
-                this->work_dir = strdup(jdg.work_dir);
-            }
-        }
-    }
-
-    ~Judge() {
-        if (this->work_dir) {
-            free(this->work_dir);
-        }
-    }
-
-    void judge_sbm(Submission &submit);
-    void copy_testcase_input(TestCase tc);
-    void init_work_dir();
-    void clear_work_dir(); 
-
-    void set_work_dir(const char *dir) {
-        if (this->work_dir) {
-            free(this->work_dir);
-        }
-
-        this->work_dir = strdup(dir);
-    }
-
-    const char *get_work_dir() {
-        return this->work_dir;
-    }
-    
-};
 
 #endif

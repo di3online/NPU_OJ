@@ -1,5 +1,6 @@
 
 #include <time.h>
+#include <stdlib.h>
 #include "../include/debug.h"
 
 
@@ -57,3 +58,37 @@ Log::print_ptid(FILE *fout)
     fprintf(fout, "pthread_t: %lu ", pthread_self());
 }
 
+void
+Log::init()
+{
+    const char *log_err = "/var/log/nojd.err";
+    const char *log_out = "/var/log/nojd.out";
+    FILE *ferr = fopen(log_err, "a+");
+    if (ferr == NULL) {
+        fprintf(stderr, "Log file: %s/nojerr.log open failed.\n", 
+                log_err);
+        exit(1);
+    }
+
+    FILE *fout = fopen(log_out, "a+");
+    if (fout == NULL) {
+        fprintf(stdout, "Log file: %s/nojout.log open failed.\n",
+                log_out);
+        exit(1);
+    }
+
+    Log::m_err = ferr;
+    Log::m_out = fout;
+    
+    pthread_rwlock_init(&Log::m_lock_err, NULL);
+    pthread_rwlock_init(&Log::m_lock_out, NULL);
+}
+
+void
+Log::destroy()
+{
+    pthread_rwlock_destroy(&Log::m_lock_err);
+    pthread_rwlock_destroy(&Log::m_lock_out);
+    fclose(Log::m_out);
+    fclose(Log::m_err);
+}
