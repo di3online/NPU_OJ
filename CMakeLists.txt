@@ -5,9 +5,9 @@ cmake_minimum_required(VERSION 2.8)
 message(STATUS "${CMAKE_INSTALL_PREFIX}")
 message(STATUS "PROJECT_BINARY_DIR ${PROJECT_BINARY_DIR}")
 
-set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -std=c++11 -O0 -Wall --pipe -ggdb")
+set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -std=c++0x -O0 -Wall --pipe -ggdb")
 message(STATUS "${CMAKE_CXX_FLAGS_RELEASE}")
-set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -std=c++11 -Wno-unused-parameter -Wno-unused-result")
+set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -std=c++0x -Wno-unused-parameter -Wno-unused-result")
 message(STATUS "${CMAKE_CXX_FLAGS_RELEASE}")
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_SOURCE_DIR}/cmake)
