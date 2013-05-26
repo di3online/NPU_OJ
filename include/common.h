@@ -1,7 +1,7 @@
 #ifndef NOJ_COMMON_INCLUDE
 #define NOJ_COMMON_INCLUDE
 
-const long BUFFER_SIZE = 512;
+const long BUFFER_SIZE = 256;
 
 enum _Noj_Mode {
 

@@ -43,7 +43,7 @@ MYSQL *DBConnMgr::connect_db( MYSQL *p_mysql_con)
     MYSQL *sock = mysql_real_connect( p_mysql_con, 
             this->m_host, this->m_user, 
             this->m_passwd, this->m_dbname, this->m_port, 
-            NULL, 0);
+            NULL, CLIENT_MULTI_STATEMENTS);
 
     if ( sock == NULL) {
         Log::e( "Connect to db failed.", "DBConnMgr");

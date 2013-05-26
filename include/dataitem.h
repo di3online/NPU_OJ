@@ -306,8 +306,11 @@ struct Submission {
     std::string         sbm_binary_file;
 
     std::vector<Result> sbm_results;
-    Submission(Problem::ID prob_id, Noj_Language lang, int mode,
-            std::string source_file, std::string binary_file):
+    Submission(Problem::ID prob_id, 
+            Noj_Language lang = NojLang_Unkown, 
+            int mode = NojMode_UnSet,
+            std::string source_file = "", 
+            std::string binary_file = ""):
         sbm_prob_id(prob_id),
         sbm_lang(lang),
         sbm_judge_set(mode),

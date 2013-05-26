@@ -64,53 +64,13 @@ public:
         this->pool_destroy();
     }
 
-    static ThreadPoolManager *get_instance() {
-        if (s_instance == NULL) {
-            s_instance = new ThreadPoolManager();
-        }
-        return s_instance;
-    }
-
-    void init_workthreads(size_t num_threads) {
-        while (m_vec_workthreads.size() < num_threads) {
-            WorkThread *new_thread = new WorkThread();
-            this->m_vec_workthreads.push_back(new_thread);
-            new_thread->start();
-        }
-
-        this->m_shutdown = false;
-    }
+    static ThreadPoolManager *get_instance();
+    void init_workthreads(size_t num_threads);
 
     bool is_shutdown();
-
     void pool_destroy();
+    WorkTask *get_task();
+    void add_task(WorkTask *p_task);
 
-    WorkTask *get_sbm() {
-        pthread_mutex_lock(&this->m_queue_mutex);
-
-        while (this->m_que_tasks.empty() && !this->m_shutdown) {
-            pthread_cond_wait(&this->m_queue_ready, &this->m_queue_mutex);
-        }
-
-        if (this->m_shutdown) {
-            pthread_mutex_unlock(&this->m_queue_mutex);
-            return NULL;
-        }
-        
-        WorkTask *p_task = this->m_que_tasks.front();
-        this->m_que_tasks.pop();
-
-        pthread_mutex_unlock(&this->m_queue_mutex);
-        return p_task;
-    }
-
-    void add_sbm(WorkTask *p_task) {
-        pthread_mutex_lock(&this->m_queue_mutex);
-        this->m_que_tasks.push(p_task);
-        pthread_mutex_unlock(&this->m_queue_mutex);
-        pthread_cond_signal(&this->m_queue_ready);
-
-        return ;
-    }
 };
 #endif

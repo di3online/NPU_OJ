@@ -97,11 +97,7 @@ int main()
     JudgeManager::get_instance()->init_judges();
     Log::d("NOJ Start", "Main");
 
-    NetworkManager::get_instance()->fetch_file("data/1/1.in", "/tmp/1.in");
-    NetworkManager::get_instance()->fetch_file("src/1.c", "/tmp/1.c");
-//    while (1){
-//        sleep(1);
-//    }
+    JudgeManager::get_instance()->loop_routine();
 
     return 0;
 }
