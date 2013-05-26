@@ -12,6 +12,10 @@
 #include "../include/common.h"
 #include "../include/debug.h"
 
+#ifndef PCRE_STUDY_JIT_COMPILE
+#define PCRE_STUDY_JIT_COMPILE 0
+#endif
+
 static char *
 regex_get_value(const char *subject, const char *key, char *dest, size_t *size);
 
@@ -169,7 +173,11 @@ regex_get_value(const char *subject, const char *key,
             //PCRE exec error
         }
 
+#ifdef PCRE_CONFIG_JIT
         pcre_free_study(re_extra);
+#else
+        pcre_free(re_extra);
+#endif
     } else {
         //PCRE compile error
         
