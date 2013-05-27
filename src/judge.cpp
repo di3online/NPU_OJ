@@ -166,8 +166,6 @@ Judge::judge_sbm(Submission &submit)
                         || res.res_type == NojRes_PresentationError) {
                     
                     char buffer[BUFFER_SIZE];
-                    struct timeval tv;
-                    gettimeofday(&tv, NULL);
                     snprintf(buffer, sizeof(buffer), 
                             "%s/%ld_%s_%04u.out", 
                             JudgeManager::get_instance()->get_output_dir(),
