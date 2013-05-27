@@ -20,6 +20,7 @@ public:
 class Judge {
 private:
     char *work_dir;
+    uid_t m_uid;
 //    Judge(const Judge &jdg) {
 //        if (this != &jdg) {
 //            if (jdg.work_dir) {
@@ -42,7 +43,11 @@ public:
     }
 
     void judge_sbm(Submission &submit);
-    void copy_testcase_input(TestCase tc);
+    void copy_src(Submission &submit);
+    void copy_testcase_input(TestCase &tc);
+    void copy_testcase_output(TestCase &tc);
+    void copy_output_file(Result &res);
+
     void init_work_dir();
     void clear_work_dir(); 
 
@@ -70,11 +75,13 @@ private:
     char *work_dir;
     char *testcase_dir;
     char *src_dir;
+    char *output_dir;
 
     unsigned int                        jm_judges_num;
 //    std::queue<Submission>              jm_sbm_lists;
     std::map<Problem::ID, Problem>      jm_prob_lists;
     std::map<TestCase::ID, TestCase>    jm_tc_lists;
+    std::queue<Submission *>            jm_submit_queue;
 
     std::queue<Result>                  jm_res_lists;
     Judge **                            jm_judges;
@@ -82,11 +89,10 @@ private:
 
     pthread_mutex_t                     jm_lock_judge;
     sem_t                               jm_sem_judge;
+    sem_t                               jm_sem_fetch_submissions;
 
     JudgeManager(); 
     
-    const char *get_testcase_dir();
-    const char *get_src_dir();
     int init_workdir(const char *path);
 public:
     ~JudgeManager();
@@ -113,8 +119,12 @@ public:
     Problem         get_problem(Problem::ID prob_id);
     TestCase        get_testcase(TestCase::ID tc_id);
 
-    Noj_State       add_result_to_list(Result res);
+    size_t          get_result_count();
+    Noj_State       add_submission_to_list(Submission &submit);
 
+    const char *get_testcase_dir();
+    const char *get_src_dir();
+    const char *get_output_dir();
 
     //TODO: Remove at the release version
     void            add_prob(Problem prob) {

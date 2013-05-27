@@ -6,4 +6,4 @@ if [ $# != 1 ]; then
 fi
 
 mv -f $1 main.cc 2>/dev/null
-exec g++ main.cc -lm -DONLINE_JUDGE -o main -Wall -pipe -O0 -std=c++0x -g
+exec g++ main.cc -lm -DONLINE_JUDGE -o main -Wall -pipe -O0 -std=c++0x -g -static

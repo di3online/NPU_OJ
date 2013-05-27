@@ -40,7 +40,7 @@ int RF_C[512] =
 };
 
 extern
-void set_resource_limit(ResourceLimit rl);
+void set_resource_limit(const ResourceLimit &rl);
 
 inline time_t convert_timeval_into_ms(struct timeval tv)
 {
@@ -49,7 +49,7 @@ inline time_t convert_timeval_into_ms(struct timeval tv)
 
 
 Result 
-Launcher::launch(Submission submit, ResourceLimit rl)
+Launcher::launch(Submission submit, ResourceLimit &rl)
 {
     if (submit.sbm_lang == NojLang_C
             || submit.sbm_lang == NojLang_CPP) {
@@ -124,27 +124,36 @@ Launcher::launch_c_or_cpp(Submission submit, ResourceLimit rl)
         extern int g_is_child;
         g_is_child = true;
 
-        nice(19);
+        int ret = chdir(rl.work_dir);
+        if (ret != 0) {
+            perror(strerror(errno));
+        }
+        ret = chroot(rl.work_dir);
+        if (ret != 0) {
+            perror(strerror(errno));
+        }
 
-        chdir(rl.work_dir);
-        chroot(rl.work_dir);
+        setuid(rl.rl_uid);
+        setresuid(rl.rl_uid, rl.rl_uid, rl.rl_uid);
         
         freopen("stdin.in", "r", stdin);
         freopen("stdout.out", "w", stdout);
-        freopen("stderr.out", "w", stderr);
-
-        //while(setgid(2000) != 0) sleep(1);
-        //while(setuid(2000) != 0) sleep(1);
-        //while(setresuid(2000, 2000, 2000) != 0) sleep(1);
+        freopen("stderr.out", "a", stderr);
 
         set_resource_limit(rl);
+        nice(19);
 
-        ptrace(PTRACE_TRACEME, 0, NULL, NULL);
 
         alarm(0);
         alarm(rl.time_limit.get_second() * 5);
 
-        int ret = execl("./main", "main", (char *) NULL);
+        ptrace(PTRACE_TRACEME, 0, NULL, NULL);
+
+        /***********************************************
+         * Program must compile to static version, 
+         * otherwise execl will fail after chroot and chdir
+         **********************************************/
+        ret = execl("./main", "./main", (char *) NULL);
 
         if (ret != 0) {
             perror("child launch: execl error");
@@ -273,6 +282,7 @@ Launcher::launch_c_or_cpp(Submission submit, ResourceLimit rl)
         }
 
     }
+
 
     return res;
 }

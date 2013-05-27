@@ -13,29 +13,27 @@ check_normal(Judge *p_jdg, Submission submit, TestCase tc)
     char command[BUFFER_SIZE];
 
     snprintf(command, sizeof(command) - 1,
-            "diff %s/run/stdout.out %s/%s 2>/dev/null 1>&2",
+            "diff %s/stdout.out %s 2>/dev/null 1>&2",
             p_jdg->get_work_dir(), 
-            p_jdg->get_work_dir(),
             tc.tc_output_file.c_str());
 
     int ret = system(command);
 
     if (0 == ret) {
         res.res_type = NojRes_CorrectAnswer;
-    } else if (1 == ret) {
+    } else if (1 == WEXITSTATUS(ret)) {
         snprintf(command, sizeof(command) - 1,
                 // diff -b -i
                 // -b, ignore changes in the amount of white space
                 // -i, ignore case differences in file contents
-                "diff %s/run/stdout.out %s/%s -b -i 1>/dev/null 2>&1",
-                p_jdg->get_work_dir(),
+                "diff %s/stdout.out %s -b -i 1>/dev/null 2>&1",
                 p_jdg->get_work_dir(),
                 tc.tc_output_file.c_str());
         ret = system(command);
 
         if (0 == ret) {
             res.res_type = NojRes_PresentationError;
-        } else if (1 == ret) {
+        } else if (1 == WEXITSTATUS(ret)) {
             res.res_type = NojRes_WrongAnswer;
         } else {
             res.res_type = NojRes_SystemError;

@@ -53,18 +53,18 @@ public:
     }
 
     inline
-    time_t get_millisecond() {
+    time_t get_millisecond() const {
         return this->m_time_size;
     }
 
     inline
-    time_t get_second() {
+    time_t get_second() const {
         return this->m_time_size / 1000 
             + ((this->m_time_size % 1000) ? 1 : 0); 
     }
 
     inline
-    bool is_set() {
+    bool is_set() const {
         return this->m_is_set;
     }
 
@@ -150,22 +150,22 @@ public:
     }
 
     inline 
-    size_t get_Byte() {
+    size_t get_Byte() const {
         return this->m_size;
     }
 
     inline
-    size_t get_KB() {
+    size_t get_KB() const {
         return this->m_size >> 10;
     }
 
     inline
-    size_t get_MB() {
+    size_t get_MB() const {
         return this->m_size >> 20;
     }
 
     inline 
-    bool is_set() {
+    bool is_set() const {
         return this->m_is_set;
     }
 
@@ -196,6 +196,8 @@ struct ResourceLimit {
     MemorySize          file_limit;       //KB
 
     char                *work_dir;
+    uid_t               rl_uid;
+    gid_t               rl_gid;
     int                 syscall_limits[512];
 
     ResourceLimit():
@@ -214,16 +216,20 @@ struct ResourceLimit {
             this->time_limit   = rl.time_limit;
             this->memory_limit = rl.memory_limit;
             this->file_limit   = rl.file_limit;
+            this->rl_uid       = rl.rl_uid;
+            this->rl_gid       = rl.rl_gid;
             memmove(this->syscall_limits, 
                     rl.syscall_limits, 
                     sizeof(rl.syscall_limits));
         }
     }
 
-    ResourceLimit &operator=(const ResourceLimit &rl) {
-        this->time_limit = rl.time_limit;
-        this->file_limit = rl.file_limit;
-        this->memory_limit = rl.memory_limit;
+    ResourceLimit &operator = (const ResourceLimit &rl) {
+        this->time_limit    = rl.time_limit;
+        this->file_limit    = rl.file_limit;
+        this->memory_limit  = rl.memory_limit;
+        this->rl_uid        = rl.rl_uid;
+        this->rl_gid        = rl.rl_gid;
         if (this->work_dir) {
             free(this->work_dir);
             this->work_dir = NULL;
@@ -257,6 +263,7 @@ struct ResourceLimit {
         if (dir) 
             this->work_dir = strdup(dir);
     }
+
 };
 
 struct Problem {
@@ -335,7 +342,7 @@ struct Result {
     MemorySize      res_max_memory;
     DateTime        res_judge_time;
     TestCase::ID    res_tc_id;
-    std::string     res_output;
+    std::string     res_output_file;
 
     Result(Submission::ID sbm_id, 
             Noj_Language lang, 
@@ -360,7 +367,8 @@ struct Result {
         res_max_memory(res.res_max_memory),
         res_judge_time(res.res_judge_time),
         res_tc_id(res.res_tc_id),
-        res_output(res.res_output) {}
+        res_output_file(res.res_output_file) 
+        {}
 
     Result(const Submission &submit):
         res_sbm_id(submit.sbm_id),
@@ -380,10 +388,10 @@ class Compiler {
 
 private:
 
-    static char *get_script_path(Submission submit);
+    static char *get_script_path(const Submission &submit);
 
 public:
-    static Result compile(Submission submit, ResourceLimit rl);
+    static Result compile(Submission submit, const ResourceLimit &rl);
 
 };
 
@@ -395,7 +403,7 @@ private:
 
 public:
     static Result launch(
-            Submission submit, ResourceLimit rl);
+            Submission submit, ResourceLimit &rl);
 };
 
 class Checker {

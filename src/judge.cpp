@@ -7,6 +7,7 @@
 #include <dirent.h>
 #include <unistd.h>
 #include <pwd.h>
+#include <sys/time.h>
 
 #include "../include/common.h"
 #include "../include/dataitem.h"
@@ -26,6 +27,8 @@ JudgeTask::JudgeTask(Submission submit):
 void
 JudgeTask::run()
 {
+
+    Log::d("Get one submission to run", "JudgeTask");
     Judge *p_jdg = JudgeManager::get_instance()->get_judge();
     p_jdg->init_work_dir();
     p_jdg->judge_sbm(this->m_submit);
@@ -34,6 +37,10 @@ JudgeTask::run()
 
     //TODO: upload the submission's results to judgemanager
     
+    for (size_t i = 0; i < this->m_submit.sbm_results.size(); ++i) {
+        
+    }
+
     return ;
 }
 
@@ -63,6 +70,8 @@ Judge::init_work_dir()
     uid_t owner = user_info->pw_uid;
     gid_t group = user_info->pw_gid;
 
+    this->m_uid = owner;
+
     if (user_info == NULL) {
         Log::e("Cannot find user judge, please check installation", 
                 "JudgeManager");
@@ -83,19 +92,39 @@ Judge::init_work_dir()
     chown(this->work_dir, owner, group);
 }
 
+inline
+static 
+const char *
+str_judge_mode(Noj_Judge_Mode mode) 
+{
+    switch (mode) {
+        case NojMode_Debug:
+            return "Debug";
+        case NojMode_Release:
+            return "Release";
+        default:
+            return "UnSet";
+    }
+}
+
 void
 Judge::judge_sbm(Submission &submit) 
 {
+
+    Log::d("judge submission", "Judge");
     submit.sbm_res_type = NojRes_Init;
+
+    this->copy_src(submit);
 
     JudgeManager *p_manager = JudgeManager::get_instance();
     Problem prob = p_manager->get_problem(submit.sbm_prob_id);
 
     char path[BUFFER_SIZE];
     snprintf(path, sizeof(path) - 1, 
-            "%s/run", this->get_work_dir());
+            "%s", this->get_work_dir());
 
     ResourceLimit rl_compile;
+    rl_compile.rl_uid = this->m_uid;
     rl_compile.time_limit.set_second(20);
     rl_compile.file_limit.set_MB(20);
     rl_compile.memory_limit.set_MB(100);
@@ -104,12 +133,16 @@ Judge::judge_sbm(Submission &submit)
     Result res = Compiler::compile(submit, rl_compile);
 
     if (res.res_type != NojRes_CompilePass) {
+        Log::e("Compile fails", "Judge");
         submit.sbm_results.push_back(res);
         submit.sbm_res_type = NojRes_CompileError;
     } else {
         //Compile Pass
         submit.sbm_res_type = NojRes_CompilePass;
         ResourceLimit rl_launch = prob.prob_rsc_lim;
+        rl_launch.rl_uid = this->m_uid;
+        printf("%d\n", rl_launch.rl_uid);
+        rl_launch.set_workdir(path);
 
         rl_launch.set_workdir(path);
 
@@ -119,6 +152,8 @@ Judge::judge_sbm(Submission &submit)
 
             this->copy_testcase_input(prob.prob_testcases[i]);
             res = Launcher::launch(submit, rl_launch);
+            extern void print_res_type(Noj_Result);
+            print_res_type(res.res_type);
 
             if (res.res_type == NojRes_RunPass) {
                 res = Checker::check(this, submit, prob.prob_testcases[i]);
@@ -126,8 +161,27 @@ Judge::judge_sbm(Submission &submit)
 
             if (res.res_type != NojRes_CorrectAnswer) {
                 flg_ac = false;
-            }
 
+                if (res.res_type == NojRes_WrongAnswer 
+                        || res.res_type == NojRes_PresentationError) {
+                    
+                    char buffer[BUFFER_SIZE];
+                    struct timeval tv;
+                    gettimeofday(&tv, NULL);
+                    snprintf(buffer, sizeof(buffer), 
+                            "%s/%ld_%s_%04u.out", 
+                            JudgeManager::get_instance()->get_output_dir(),
+                            submit.sbm_id, 
+                            str_judge_mode(submit.sbm_cur_mode),
+                            JudgeManager::get_instance()->get_result_count() 
+                                % 100000
+                            );
+                    res.res_output_file = buffer;
+                    this->copy_output_file(res);
+                } 
+            }
+            extern void print_res_type(Noj_Result);
+            print_res_type(res.res_type);
             submit.sbm_results.push_back(res);
         }
 
@@ -139,22 +193,57 @@ Judge::judge_sbm(Submission &submit)
 
     }
 
+    extern void print_res_type(Noj_Result);
+    print_res_type(submit.sbm_res_type);
 }
 
 void 
-Judge::copy_testcase_input(TestCase tc)
+Judge::copy_src(Submission &submit)
 {
-    char path[BUFFER_SIZE];
-    snprintf(path, sizeof(path) - 1,
-            "cp %s/%s %s/run/stdin.in", 
-            this->get_work_dir(), 
+    char cmd[BUFFER_SIZE];
+    snprintf(cmd, sizeof(cmd) - 1, 
+            "cp %s %s/code", 
+            submit.sbm_source_file.c_str(),
+            this->get_work_dir());
+
+    int ret = system(cmd);
+    if (ret != 0) {
+        Log::e("Copy src file error", "Judge");
+    }
+}
+
+void 
+Judge::copy_testcase_input(TestCase &tc)
+{
+    char cmd[BUFFER_SIZE];
+    snprintf(cmd, sizeof(cmd) - 1,
+            "cp %s %s/stdin.in && chown judge %s/stdin.in", 
             tc.tc_input_file.c_str(),
+            this->get_work_dir(),
             this->get_work_dir());
             
-    int ret = system(path);
+    int ret = system(cmd);
     if (ret != 0) {
+        Log::e("Copy testcase file error", "Judge");
         fprintf(stderr, "Judge: copy testcase input file error\n");
     }
+}
+
+void
+Judge::copy_output_file(Result &res) {
+
+    char cmd[BUFFER_SIZE];
+    snprintf(cmd, sizeof(cmd), 
+            "mv %s/stdout.out %s", 
+            this->get_work_dir(),
+            res.res_output_file.c_str());
+
+    int ret = system(cmd);
+    if (0 != ret) {
+        Log::e("Coping output file to Managr fails", "Judge");
+    }
+
+    return ;
 }
 
 void
@@ -165,11 +254,11 @@ Judge::clear_work_dir()
     snprintf(command, sizeof(command) - 1, 
             "rm -rf %s/*", this->work_dir);
     
-    //TODO
-    //int ret = system(command);
-    //if (ret != 0) {
-    //    printf("Judge: clear_work_dir error\n");
-    //}
+    int ret = system(command);
+    if (ret != 0) {
+        printf("Judge: clear_work_dir error\n");
+    }
+
 }
 
 JudgeManager *JudgeManager::s_instance = NULL;
@@ -185,7 +274,10 @@ JudgeManager *JudgeManager::get_instance()
 
 JudgeManager::JudgeManager() 
 {
-    this->work_dir = NULL;
+    this->work_dir     = NULL;
+    this->output_dir   = NULL;
+    this->testcase_dir = NULL;
+    this->src_dir      = NULL;
 }
 
 JudgeManager::~JudgeManager() 
@@ -199,7 +291,7 @@ JudgeManager::~JudgeManager()
 void 
 JudgeManager::loop_routine() {
 
-    sem_wait(&jm_sem_judge);
+    sem_wait(&jm_sem_fetch_submissions);
     while (1) {
         Submission submit(-1);
 
@@ -209,20 +301,29 @@ JudgeManager::loop_routine() {
                     "JudgeManager");
         }
 
-        JudgeTask *jdg_task = new JudgeTask(submit);
+        if (submit.sbm_judge_set & NojMode_Debug) {
+            submit.sbm_cur_mode = NojMode_Debug;
+            JudgeTask *jdg_task = new JudgeTask(submit); 
+            ThreadPoolManager::get_instance()->add_task(jdg_task);
+            Log::d("Put one task to thread pool", "JudgeManager");
+        }
 
-        ThreadPoolManager::get_instance()->add_task(jdg_task);
+        if (submit.sbm_judge_set & NojMode_Release) {
+            submit.sbm_cur_mode = NojMode_Release;
+            JudgeTask *jdg_task = new JudgeTask(submit); 
+            ThreadPoolManager::get_instance()->add_task(jdg_task);
+            Log::d("Put one task to thread pool", "JudgeManager");
+        }
 
-        sem_post(&jm_sem_judge);
-
-        int ret = sem_trywait(&jm_sem_judge);
+        //TODO: change to timewait
+        int ret = sem_trywait(&jm_sem_fetch_submissions);
         if (ret == 0) {
             //if there is submission waiting to be judge, continue to judge
             continue;
         } else {
             //else update the result and wait for new submission
             this->update_results_to_server();
-            sem_wait(&jm_sem_judge);
+            sem_wait(&jm_sem_fetch_submissions);
         }
 
     }
@@ -245,16 +346,25 @@ pick_lang(const char *lang)
     return NojLang_Unkown;
 }
 
+size_t 
+JudgeManager::get_result_count()
+{
+    static size_t count = 0;
+    count = (count + 1) % 1000000;
+    return count;
+}
+
 Noj_State 
 JudgeManager::fetch_submission_from_db(Submission &submit)
 {
-    //TODO
     
     MYSQL *db_con = DBConnMgr::get_instance()->get_available_connection();
 
     char sqlcmd[BUFFER_SIZE];
 
-    while (1) {
+    bool flg_fetch_new = false;
+
+    while (!flg_fetch_new) {
         
         snprintf(sqlcmd, sizeof(sqlcmd), 
                 "call fetch_submission()");
@@ -268,6 +378,7 @@ JudgeManager::fetch_submission_from_db(Submission &submit)
             MYSQL_RES *res = mysql_store_result(db_con);
 
             if (mysql_num_rows(res) != 0) {
+                fprintf(stdout, "Found\n");
                 Log::d("Fetch one new Submission from db", "JudgeManager");
                 
                 MYSQL_ROW row;
@@ -289,9 +400,10 @@ JudgeManager::fetch_submission_from_db(Submission &submit)
 
                     //TODO mode
                     //submit.sbm_cur_mode 
-                    submit.sbm_judge_set = NojMode_Release;
+                    submit.sbm_judge_set = NojMode_Release; //| NojMode_Debug;
                 }
                 mysql_free_result(res);
+                flg_fetch_new = true;
             } else {
                 mysql_free_result(res);
                 usleep(300 * 1000); 
@@ -423,6 +535,7 @@ JudgeManager::init_judges()
     ThreadPoolManager::get_instance()->init_workthreads(this->jm_judges_num);
     pthread_mutex_init(&this->jm_lock_judge, NULL);
     sem_init(&this->jm_sem_judge, 0, this->jm_judges_num);
+    sem_init(&this->jm_sem_fetch_submissions, 0, this->jm_judges_num);
     
     return 0;
 }
@@ -442,6 +555,7 @@ JudgeManager::destroy_judges()
 
     pthread_mutex_destroy(&this->jm_lock_judge);
     sem_destroy(&this->jm_sem_judge);
+    sem_destroy(&this->jm_sem_fetch_submissions);
 
     return 0;
 }
@@ -449,8 +563,11 @@ JudgeManager::destroy_judges()
 Judge *
 JudgeManager::get_judge()
 {
+    Log::d("Request a judge", "JudgeManager");
     sem_wait(&this->jm_sem_judge);
+    Log::d("Pass sem wait", "JudgeManager");
     pthread_mutex_lock(&this->jm_lock_judge);   
+    Log::d("Pass lock wait", "JudgeManager");
     Judge *jdg = NULL;
     for (unsigned int i = 0; i < this->jm_judges_num; ++i) {
         if (this->jm_judges_flag[i] == JS_Available) {
@@ -460,6 +577,8 @@ JudgeManager::get_judge()
         }
     }
     pthread_mutex_unlock(&this->jm_lock_judge);
+
+    Log::d("Get a judge", "JudgeManager");
     
     return jdg;
 }
@@ -476,7 +595,9 @@ JudgeManager::release_judge(Judge *jdg)
     }
 
     pthread_mutex_unlock(&this->jm_lock_judge);
+    Log::d("Release a judge", "JudgeManager");
     sem_post(&this->jm_sem_judge);
+    sem_post(&jm_sem_fetch_submissions);
     return ;
 }
 
@@ -528,7 +649,6 @@ JudgeManager::fetch_problem_from_db( Problem::ID prob_id)
         MYSQL_RES *res = mysql_store_result( db_con);
         if ( res) {
             MYSQL_ROW row;
-            pthread_mutex_lock(&this->jm_lock_judge);
             while ( ( row = mysql_fetch_row( res))) {
                 TestCase::ID id = strtoul( row[0], NULL, 10);
                 TestCase tc( id, prob_id);
@@ -538,8 +658,13 @@ JudgeManager::fetch_problem_from_db( Problem::ID prob_id)
                 this->fetch_testcase_from_ftp( tc);
                 prob.add_testcase(tc);
             }
+            Log::d("Lock fetch_problem_from_db", "JudgeManager");
+            int is_locked = pthread_mutex_trylock(&this->jm_lock_judge);
             this->jm_prob_lists[prob_id] = prob;
-            pthread_mutex_unlock(&this->jm_lock_judge);
+            if (is_locked == 0) {
+                pthread_mutex_unlock(&this->jm_lock_judge);
+            }
+            Log::d("Unlock fetch_problem_from_db", "JudgeManager");
             mysql_free_result( res);
         } else {
             Log::e( "SQL select testcase info but gets nothing", "JudgeManager");
@@ -554,8 +679,32 @@ JudgeManager::fetch_problem_from_db( Problem::ID prob_id)
 
 
 const char *
+JudgeManager::get_output_dir()
+{
+    int is_locked = pthread_mutex_trylock(&this->jm_lock_judge);
+    if (output_dir == NULL) {
+        if (this->work_dir == NULL) {
+            return NULL;
+        }
+        this->output_dir = (char *) malloc(strlen(this->work_dir) 
+                + strlen("/output") + 2);
+        snprintf(this->output_dir, 
+                strlen(this->work_dir) + strlen("/output") + 1, 
+                "%s%s", 
+                this->work_dir, "/output");
+    }    
+
+    if (is_locked == 0) {
+        pthread_mutex_unlock(&this->jm_lock_judge);
+    }
+
+    return output_dir;
+}
+const char *
 JudgeManager::get_testcase_dir()
 {
+
+    int is_locked = pthread_mutex_trylock(&this->jm_lock_judge);
     if (testcase_dir == NULL) {
         if (this->work_dir == NULL) {
             return NULL;
@@ -568,12 +717,18 @@ JudgeManager::get_testcase_dir()
                 this->work_dir, "/data");
     }    
 
+    if (is_locked == 0) {
+        pthread_mutex_unlock(&this->jm_lock_judge);
+    }
+
     return testcase_dir;
 }
 
 const char *
 JudgeManager::get_src_dir()
 {
+    Log::d("Lock get src dir", "JudgeManager");
+    int is_locked = pthread_mutex_trylock(&this->jm_lock_judge);
     if (this->src_dir == NULL) {
         if (this->work_dir == NULL) {
             return NULL;
@@ -587,17 +742,40 @@ JudgeManager::get_src_dir()
                 this->work_dir, "/src");
     }
 
+    if (is_locked == 0) {
+        pthread_mutex_unlock(&this->jm_lock_judge);
+    }
+    Log::d("Unlock get src dir", "JudgeManager");
     return this->src_dir;
 }
 
 Noj_State JudgeManager::fetch_testcase_from_ftp( TestCase &tc)
 {
-    pthread_mutex_lock(&this->jm_lock_judge);
+    Log::d("Lock fetch_testcase_from_ftp", "JudgeManager");
+    char file_path[BUFFER_SIZE];
+
+    int is_locked = pthread_mutex_trylock(&this->jm_lock_judge);
+
+    snprintf(file_path, sizeof(file_path), 
+            "%s/%ld.in", 
+            this->get_testcase_dir(), tc.tc_id);
     Noj_State stat = NetworkManager::get_instance()->fetch_file(
             tc.tc_remote_input_file.c_str(), 
-            JudgeManager::get_testcase_dir());
+            file_path);
+    tc.tc_input_file = file_path;
 
-    pthread_mutex_unlock(&this->jm_lock_judge);
+    snprintf(file_path, sizeof(file_path), 
+            "%s/%ld.out", 
+            this->get_testcase_dir(), tc.tc_id);
+    stat = NetworkManager::get_instance()->fetch_file(
+            tc.tc_remote_output_file.c_str(),
+            file_path);
+    tc.tc_output_file = file_path;
+
+    if (is_locked == 0) {
+        pthread_mutex_unlock(&this->jm_lock_judge);
+    }
+    Log::d("Unlock fetch_testcase_from_ftp", "JudgeManager");
 
     return stat;
 }
@@ -605,17 +783,21 @@ Noj_State JudgeManager::fetch_testcase_from_ftp( TestCase &tc)
 Problem 
 JudgeManager::get_problem(Problem::ID prob_id) 
 {
+    Log::d("Lock get_problem", "JudgeManager");
     pthread_mutex_lock(&jm_lock_judge);
     if (this->jm_prob_lists.find(prob_id) 
             == this->jm_prob_lists.end()) {
-        pthread_mutex_unlock(&this->jm_lock_judge);
+        //pthread_mutex_unlock(&this->jm_lock_judge);
+        //Log::d("Unlock get_problem", "JudgeManager");
         this->fetch_problem_from_db(prob_id);
+        //Log::d("Lock get_problem", "JudgeManager");
+        //pthread_mutex_lock(&jm_lock_judge);
     }
 
-    pthread_mutex_lock(&jm_lock_judge);
     Problem prob = this->jm_prob_lists[prob_id];
     pthread_mutex_unlock(&jm_lock_judge);
 
+    Log::d("Unlock get_problem", "JudgeManager");
     return prob;
 }
 

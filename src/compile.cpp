@@ -13,7 +13,7 @@
 #include "../include/judge.h"
 
 
-void set_resource_limit(ResourceLimit rl)
+void set_resource_limit(const ResourceLimit &rl)
 {
     struct rlimit lim;
     if (rl.time_limit.is_set()) {
@@ -39,9 +39,9 @@ void set_resource_limit(ResourceLimit rl)
 }
 
 char *
-Compiler::get_script_path(Submission submit)
+Compiler::get_script_path(const Submission &submit)
 {
-    const char *root_dir = JudgeManager::get_instance()->get_main_dir();
+    const char *root_dir = getenv("NOJ_WORKDIR");
 
     Noj_Language lang = submit.sbm_lang;
     Noj_Judge_Mode mode = submit.sbm_cur_mode;
@@ -50,6 +50,12 @@ Compiler::get_script_path(Submission submit)
 
     if (lang == NojLang_C && mode == NojMode_Release) {
         file = "scripts/compile_c_release.sh";
+    } else if (lang == NojLang_CPP && mode == NojMode_Release) {
+        file = "scripts/compile_cpp_release.sh";
+    } else if (lang == NojLang_C && mode == NojMode_Debug) {
+        file = "scripts/compile_c_debug.sh";
+    } else if (lang == NojLang_CPP && mode == NojMode_Debug) {
+        file = "scripts/compile_cpp_debug.sh";
     } else {
         return NULL;
     }
@@ -63,7 +69,7 @@ Compiler::get_script_path(Submission submit)
 }
 
 Result 
-Compiler::compile(Submission submit, ResourceLimit rl)
+Compiler::compile(Submission submit, const ResourceLimit &rl)
 {
     
     Result res(submit);
@@ -95,6 +101,7 @@ Compiler::compile(Submission submit, ResourceLimit rl)
         extern bool g_is_child;
         g_is_child = true;
         chdir(rl.work_dir);
+        setuid(rl.rl_uid);
 
         close(fd[0]);
         dup2(fd[1], STDERR_FILENO);
@@ -102,12 +109,17 @@ Compiler::compile(Submission submit, ResourceLimit rl)
 
         set_resource_limit(rl);
 
-        execl(compile_script_path, 
-                compile_script_path,
-                submit.sbm_source_file.c_str(), 
-                (void *) NULL);
+        int ret = execl(compile_script_path, 
+                    compile_script_path,
+                    "code", 
+                    (void *) NULL);
+        if (ret != 0) {
+            perror(strerror(errno));
+        }
 
+        fprintf(stderr, "No Run");
         exit(1);
+        
 
     } else {
 
