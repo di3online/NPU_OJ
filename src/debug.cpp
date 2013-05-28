@@ -26,7 +26,9 @@ Log::d(const char *message, const char *classname)
 void 
 Log::e(const char *error, const char *classname)
 {
+    fprintf(stdout, "waiting for lock err\n");
     pthread_rwlock_wrlock(&Log::m_lock_err);
+    fprintf(stdout, "Lock err\n");
     Log::print_datetime(Log::m_err);
     Log::print_ptid(Log::m_err);
     fprintf(Log::m_err, "Class: %s \n", classname);
@@ -34,7 +36,9 @@ Log::e(const char *error, const char *classname)
     fputs("\n", Log::m_err);
     fflush(Log::m_err);
 
-    pthread_rwlock_wrlock(&Log::m_lock_err);
+    fprintf(stdout, "Unlock err\n");
+
+    pthread_rwlock_unlock(&Log::m_lock_err);
 }
 
 void

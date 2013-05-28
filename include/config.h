@@ -19,6 +19,8 @@ public:
     unsigned long get_ulong(const char *key);
     long get_long(const char *key);
 
+    char *parse_real_path(const char *path);
+
     void test_regex();
     
 };

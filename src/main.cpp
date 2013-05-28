@@ -75,6 +75,9 @@ int main()
     if (getenv("NOJ_WORKDIR") == NULL) {
         setenv("NOJ_WORKDIR", "/usr/local/noj", 0);
     }
+
+    fprintf(stdout, "%s\n", get_current_dir_name());
+
 #ifdef NDEBUG
     daemon_run();
 #endif

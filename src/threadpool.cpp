@@ -74,6 +74,8 @@ ThreadPoolManager::init_workthreads(size_t num_threads) {
         new_thread->start();
     }
 
+    pthread_setconcurrency(num_threads + 1);
+
 }
 
 void ThreadPoolManager::pool_destroy()

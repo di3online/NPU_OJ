@@ -9,6 +9,7 @@
 #include "../include/common.h"
 #include "../include/dataitem.h"
 #include "../include/threadpool.h"
+#include "../include/lang.h"
 
 class JudgeTask : public WorkTask {
     Submission m_submit;
@@ -61,6 +62,10 @@ public:
     const char *get_work_dir() {
         return this->work_dir;
     }
+
+    uid_t get_uid() const {
+        return this->m_uid;
+    }
     
 };
 
@@ -82,6 +87,7 @@ private:
     std::map<Problem::ID, Problem>      jm_prob_lists;
     std::map<TestCase::ID, TestCase>    jm_tc_lists;
     std::queue<Submission *>            jm_submit_queue;
+    std::vector<LangJudge *>            jm_lang_judges;
 
     std::queue<Result>                  jm_res_lists;
     Judge **                            jm_judges;
@@ -122,6 +128,10 @@ public:
     size_t          get_result_count();
     Noj_State       add_submission_to_list(Submission &submit);
 
+    void            add_lang_judge(LangJudge *jdg);
+    LangJudge *     get_lang_judge(Submission &submit);
+    void            release_lang_judge(LangJudge *jdg);
+
     const char *get_testcase_dir();
     const char *get_src_dir();
     const char *get_output_dir();
@@ -133,7 +143,6 @@ public:
 
     }
 };
-
 
 
 #endif //__JUDGE_INCLUDED_

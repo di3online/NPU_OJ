@@ -275,3 +275,41 @@ ConfigManager::get_ulong(const char *key)
 
     return num;
 }
+
+
+char *
+ConfigManager::parse_real_path(const char *path)
+{
+
+    fprintf(stdout, "Parse: %s\n", path);
+    if (strchr(path, '$') != NULL) {
+        const char *loc = strstr(path, "$NOJ_WORKDIR");
+        if (loc == NULL) {
+            char buffer[BUFFER_SIZE];
+            snprintf(buffer, sizeof(buffer), 
+                    "Can't parse this path: %s", 
+                    path);
+            Log::e(buffer, "ConfigManager");
+            exit(EXIT_FAILURE);
+        }
+        char *env_path = getenv("NOJ_WORKDIR");
+
+        size_t size = strlen(env_path);
+        size += strlen(loc + strlen("$NOJ_WORKDIR")) + 4;
+
+
+        char *ret_buf = (char *)malloc(size);
+        snprintf(ret_buf, size,
+                "%s%s", 
+                env_path, 
+                loc + strlen("$NOJ_WORKDIR"));
+
+        fprintf(stdout, "Parse: %s\n", ret_buf);
+        return ret_buf;
+        
+    } else {
+
+        fprintf(stdout, "Parse: no found $\n");
+        return NULL;
+    }
+}

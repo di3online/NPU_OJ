@@ -110,89 +110,13 @@ str_judge_mode(Noj_Judge_Mode mode)
 void
 Judge::judge_sbm(Submission &submit) 
 {
+    LangJudge *lang_judge = 
+        JudgeManager::get_instance()->get_lang_judge(submit);
 
-    Log::d("judge submission", "Judge");
-    submit.sbm_res_type = NojRes_Init;
-
-    this->copy_src(submit);
-
-    JudgeManager *p_manager = JudgeManager::get_instance();
-    Problem prob = p_manager->get_problem(submit.sbm_prob_id);
-
-    char path[BUFFER_SIZE];
-    snprintf(path, sizeof(path) - 1, 
-            "%s", this->get_work_dir());
-
-    ResourceLimit rl_compile;
-    rl_compile.rl_uid = this->m_uid;
-    rl_compile.time_limit.set_second(20);
-    rl_compile.file_limit.set_MB(20);
-    rl_compile.memory_limit.set_MB(100);
-    rl_compile.set_workdir(path);
-
-    Result res = Compiler::compile(submit, rl_compile);
-
-    if (res.res_type != NojRes_CompilePass) {
-        Log::e("Compile fails", "Judge");
-        submit.sbm_results.push_back(res);
-        submit.sbm_res_type = NojRes_CompileError;
-    } else {
-        //Compile Pass
-        submit.sbm_res_type = NojRes_CompilePass;
-        ResourceLimit rl_launch = prob.prob_rsc_lim;
-        rl_launch.rl_uid = this->m_uid;
-        printf("%d\n", rl_launch.rl_uid);
-        rl_launch.set_workdir(path);
-
-        rl_launch.set_workdir(path);
-
-        bool flg_ac = true;
-
-        for (size_t i = 0; i < prob.prob_testcases.size(); ++i) { 
-
-            this->copy_testcase_input(prob.prob_testcases[i]);
-            res = Launcher::launch(submit, rl_launch);
-            extern void print_res_type(Noj_Result);
-            print_res_type(res.res_type);
-
-            if (res.res_type == NojRes_RunPass) {
-                res = Checker::check(this, submit, prob.prob_testcases[i]);
-            }
-
-            if (res.res_type != NojRes_CorrectAnswer) {
-                flg_ac = false;
-
-                if (res.res_type == NojRes_WrongAnswer 
-                        || res.res_type == NojRes_PresentationError) {
-                    
-                    char buffer[BUFFER_SIZE];
-                    snprintf(buffer, sizeof(buffer), 
-                            "%s/%ld_%s_%04u.out", 
-                            JudgeManager::get_instance()->get_output_dir(),
-                            submit.sbm_id, 
-                            str_judge_mode(submit.sbm_cur_mode),
-                            JudgeManager::get_instance()->get_result_count() 
-                                % 100000
-                            );
-                    res.res_output_file = buffer;
-                    this->copy_output_file(res);
-                } 
-            }
-            extern void print_res_type(Noj_Result);
-            print_res_type(res.res_type);
-            submit.sbm_results.push_back(res);
-        }
-
-        if (flg_ac) {
-            submit.sbm_res_type = NojRes_Accept;
-        } else {
-            submit.sbm_res_type = NojRes_NotAccept;
-        }
-
-    }
-
-    extern void print_res_type(Noj_Result);
-    print_res_type(submit.sbm_res_type);
+    Log::d("Get a lang_judge", "Judge");
+    lang_judge->judge(this, submit);
+    JudgeManager::get_instance()->release_lang_judge(lang_judge);
+    Log::d("Release a lang_judge", "Judge");
 }
 
 void 
@@ -290,7 +214,7 @@ void
 JudgeManager::loop_routine() {
 
     sem_wait(&jm_sem_fetch_submissions);
-    while (1) {
+    while (true) {
         Submission submit(-1);
 
         Noj_State stat = this->fetch_submission_from_db(submit);
@@ -398,7 +322,7 @@ JudgeManager::fetch_submission_from_db(Submission &submit)
 
                     //TODO mode
                     //submit.sbm_cur_mode 
-                    submit.sbm_judge_set = NojMode_Release; //| NojMode_Debug;
+                    submit.sbm_judge_set = NojMode_Release;// | NojMode_Debug;
                 }
                 mysql_free_result(res);
                 flg_fetch_new = true;
@@ -416,6 +340,9 @@ JudgeManager::fetch_submission_from_db(Submission &submit)
     }
 
     DBConnMgr::get_instance()->release_connection(db_con);
+
+    static int count = 0;
+    fprintf(stdout, "Fetch submission %d id %ld\n", ++count, submit.sbm_id);
     return Noj_Normal;
 }
 
@@ -516,7 +443,14 @@ int
 JudgeManager::init_judges()
 {
     //TODO make it not dead
+    
     this->init_workdir("/home/noj");
+
+    this->add_lang_judge(new LangCDebug());
+    this->add_lang_judge(new LangCRelease());
+    this->add_lang_judge(new LangCppDebug());
+    this->add_lang_judge(new LangCppRelease());
+
     this->jm_judges_num = 
         (unsigned int) ConfigManager::get_instance()->get_ulong("JUDGES_NUM");
 
@@ -571,9 +505,16 @@ JudgeManager::get_judge()
         if (this->jm_judges_flag[i] == JS_Available) {
             jdg = this->jm_judges[i];
             this->jm_judges_flag[i] = JS_Used;
+
+            fprintf(stdout, "Get judge %d\n", i);
             break;
         }
     }
+    //TODO
+    //remove
+    static int count = 0;
+    fprintf(stdout, "Judge count :%d\n", ++count);
+    fflush(stdout);
     pthread_mutex_unlock(&this->jm_lock_judge);
 
     Log::d("Get a judge", "JudgeManager");
@@ -586,16 +527,33 @@ JudgeManager::release_judge(Judge *jdg)
 {
     pthread_mutex_lock(&this->jm_lock_judge);
     for (unsigned int i = 0; i < this->jm_judges_num; ++i) {
-        if (this->jm_judges[i] == jdg) {
+        if (this->jm_judges_flag[i] == JS_Used 
+                && this->jm_judges[i] == jdg) {
             this->jm_judges_flag[i] = JS_Available;
+            fprintf(stdout, "Release judge %d\n", i);
             break;
         }
     }
+
+    int s_count = 0;
+    for (unsigned int i = 0; i < this->jm_judges_num; ++i) {
+        if (this->jm_judges_flag[i] == JS_Available) {
+            s_count++;
+        }
+    }
+
+    //TODO
+    //remove
+    static int count = 0;
+    fprintf(stdout, "Judge count :%d done!!!\n", ++count);
+    fprintf(stdout, "%d Judge available\n", s_count);
+    fflush(stdout);
 
     pthread_mutex_unlock(&this->jm_lock_judge);
     Log::d("Release a judge", "JudgeManager");
     sem_post(&this->jm_sem_judge);
     sem_post(&jm_sem_fetch_submissions);
+
     return ;
 }
 
@@ -799,3 +757,64 @@ JudgeManager::get_problem(Problem::ID prob_id)
     return prob;
 }
 
+void
+JudgeManager::add_lang_judge(LangJudge *jdg)
+{
+    bool flg_duplicable = false;
+    for (size_t i = 0; i < this->jm_lang_judges.size(); ++i) {
+        if (*this->jm_lang_judges[i] == *jdg) {
+            if (jdg != this->jm_lang_judges[i]) {
+                delete jdg;
+            }
+            flg_duplicable = true;
+        }
+    }
+    if (!flg_duplicable) {
+        this->jm_lang_judges.push_back(jdg);
+    }
+
+}
+
+const char *
+str_lang(Noj_Language lang)
+{
+    switch (lang) {
+        case NojLang_C:
+            return "C";
+        case NojLang_CPP:
+            return "Cpp";
+        case NojLang_Java:
+            return "Java";
+        case NojLang_Pascal:
+            return "Pascal";
+        default:
+            return "NojLang_Unkown";
+    }
+}
+
+LangJudge *
+JudgeManager::get_lang_judge(Submission &submit)
+{
+    for (size_t i = 0; i < this->jm_lang_judges.size(); ++i) {
+        if (this->jm_lang_judges[i]->match(submit)) {
+            return this->jm_lang_judges[i];
+        }
+    }
+    
+    char buffer[BUFFER_SIZE];
+    snprintf(buffer, sizeof(buffer), 
+            "Can't find a matching LangJudge for "
+            "Submission %ld, mode %s, lang %s",
+            submit.sbm_id, 
+            str_judge_mode(submit.sbm_cur_mode), 
+            str_lang(submit.sbm_lang));
+
+    Log::e(buffer, "JudgeManager");
+    return NULL;
+}
+
+void 
+JudgeManager::release_lang_judge(LangJudge *jdg) 
+{
+    return ;
+}
