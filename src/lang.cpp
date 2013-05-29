@@ -27,6 +27,7 @@ LangJudge::match(Submission &submit)
 }
 
 static
+inline
 void set_resource_limit(const ResourceLimit &rl)
 {
     struct rlimit lim;
@@ -46,6 +47,7 @@ void set_resource_limit(const ResourceLimit &rl)
         lim.rlim_max = rl.file_limit.get_Byte();
         lim.rlim_cur = rl.file_limit.get_Byte();
         setrlimit(RLIMIT_FSIZE, &lim);
+        fprintf(stdout, "File limit set: %u MB\n", rl.file_limit.get_MB());
     }
 
     return ;
@@ -77,15 +79,23 @@ int RF_C[512] =
 };
 
 static
+inline
 void 
 init_system_call_limits(ResourceLimit &rl)
 {
     //Judge process run
     memset(rl.syscall_limits, 0, sizeof(rl.syscall_limits));
-
-    for (int i = 0; RF_C[i] >= 0; i += 2) {
-        rl.syscall_limits[RF_C[i]] = RF_C[i + 1];
+    static int *sys_call_init = NULL;
+    if (sys_call_init == NULL) {
+        sys_call_init = (int *)malloc(512 * sizeof(int));
+        memset(sys_call_init, 0, 512);
+        for (int i = 0; RF_C[i] >= 0; i += 2) {
+            sys_call_init[RF_C[i]] = RF_C[i + 1];
+        }
     }
+
+    memcpy(rl.syscall_limits, sys_call_init, 512 * sizeof(int));
+
 
     return ;
 
@@ -130,6 +140,10 @@ LangC::launch(Submission submit, ResourceLimit &rl)
     Result res(submit);
 
 
+    //TODO: change file limit
+    rl.file_limit.set_MB(5);
+
+
     init_system_call_limits(rl);
 
     pid_t pid = fork();
@@ -158,12 +172,12 @@ LangC::launch(Submission submit, ResourceLimit &rl)
         freopen("stdout.out", "w", stdout);
         freopen("stderr.out", "a", stderr);
 
-        set_resource_limit(rl);
         nice(19);
 
 
         alarm(0);
         alarm(rl.time_limit.get_second() * 5);
+        set_resource_limit(rl);
 
         ptrace(PTRACE_TRACEME, 0, NULL, NULL);
 
@@ -420,7 +434,7 @@ LangC::judge(Judge *jdg, Submission &submit)
         for (size_t i = 0; i < prob.prob_testcases.size(); ++i) { 
 
             jdg->copy_testcase_input(prob.prob_testcases[i]);
-            res = Launcher::launch(submit, rl_launch);
+            res = this->launch(submit, rl_launch);
             extern void print_res_type(Noj_Result);
             print_res_type(res.res_type);
 
