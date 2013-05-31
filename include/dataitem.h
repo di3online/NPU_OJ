@@ -192,7 +192,8 @@ public:
 
 struct ResourceLimit {
     MemorySize          memory_limit;     //KB
-    TimeUsage           time_limit;       //ms
+    TimeUsage           single_time_limit;
+    TimeUsage           total_time_limit;       //ms
     MemorySize          file_limit;       //KB
 
     char                *work_dir;
@@ -202,7 +203,8 @@ struct ResourceLimit {
 
     ResourceLimit():
         memory_limit(),
-        time_limit(),
+        single_time_limit(),
+        total_time_limit(),
         file_limit(),
         work_dir(NULL) {}
 
@@ -213,23 +215,25 @@ struct ResourceLimit {
             if (rl.work_dir) 
                 this->work_dir = strdup(rl.work_dir);
 
-            this->time_limit   = rl.time_limit;
-            this->memory_limit = rl.memory_limit;
-            this->file_limit   = rl.file_limit;
-            this->rl_uid       = rl.rl_uid;
-            this->rl_gid       = rl.rl_gid;
+            this->single_time_limit = rl.single_time_limit;
+            this->total_time_limit  = rl.total_time_limit;
+            this->memory_limit      = rl.memory_limit;
+            this->file_limit        = rl.file_limit;
+            this->rl_uid            = rl.rl_uid;
+            this->rl_gid            = rl.rl_gid;
             memmove(this->syscall_limits, 
                     rl.syscall_limits, 
                     sizeof(rl.syscall_limits));
         }
     }
 
-    ResourceLimit &operator = (const ResourceLimit &rl) {
-        this->time_limit    = rl.time_limit;
-        this->file_limit    = rl.file_limit;
-        this->memory_limit  = rl.memory_limit;
-        this->rl_uid        = rl.rl_uid;
-        this->rl_gid        = rl.rl_gid;
+    ResourceLimit &operator     = (const ResourceLimit &rl) {
+        this->single_time_limit = rl.single_time_limit;
+        this->total_time_limit  = rl.total_time_limit;
+        this->file_limit        = rl.file_limit;
+        this->memory_limit      = rl.memory_limit;
+        this->rl_uid            = rl.rl_uid;
+        this->rl_gid            = rl.rl_gid;
         if (this->work_dir) {
             free(this->work_dir);
             this->work_dir = NULL;

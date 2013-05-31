@@ -26,14 +26,61 @@ LangJudge::match(Submission &submit)
             && this->get_mode() == submit.sbm_cur_mode);
 }
 
+static 
+inline
+time_t
+get_rl_cpu_second(const ResourceLimit &rl)
+{
+    time_t lim_time;
+    if (rl.single_time_limit.is_set() && rl.total_time_limit.is_set()) {
+        lim_time = ((rl.single_time_limit.get_millisecond() 
+                    < rl.total_time_limit.get_millisecond()) 
+                ? (rl.single_time_limit.get_second()) 
+                : (rl.total_time_limit.get_second()));
+    } else if (rl.single_time_limit.is_set()){
+        lim_time = rl.single_time_limit.get_second();
+    } else if (rl.total_time_limit.is_set()) {
+        lim_time = rl.total_time_limit.get_second();
+    } else {
+        return 0;
+    }
+    lim_time = (lim_time < 1) ? (1) : (lim_time);
+    return lim_time;
+    
+}
+
+static 
+inline
+time_t
+get_rl_cpu_millisecond(const ResourceLimit &rl)
+{
+    time_t lim_time;
+    if (rl.single_time_limit.is_set() && rl.total_time_limit.is_set()) {
+        lim_time = ((rl.single_time_limit.get_millisecond() 
+                    < rl.total_time_limit.get_millisecond()) 
+                ? (rl.single_time_limit.get_millisecond()) 
+                : (rl.total_time_limit.get_millisecond()));
+    } else if (rl.single_time_limit.is_set()){
+        lim_time = rl.single_time_limit.get_millisecond();
+    } else if (rl.total_time_limit.is_set()) {
+        lim_time = rl.total_time_limit.get_millisecond();
+    } else {
+        return 0;
+    }
+    lim_time = (lim_time < 1) ? (1) : (lim_time);
+    return lim_time;
+    
+}
+
 static
 inline
 void set_resource_limit(const ResourceLimit &rl)
 {
     struct rlimit lim;
-    if (rl.time_limit.is_set()) {
-        lim.rlim_max = rl.time_limit.get_second() * 3 / 2 + 1;
-        lim.rlim_cur = rl.time_limit.get_second() + 1;
+    if (rl.single_time_limit.is_set() || rl.total_time_limit.is_set()) {
+
+        lim.rlim_max = rl.single_time_limit.get_second() * 3 / 2 + 1;
+        lim.rlim_cur = rl.single_time_limit.get_second() + 1;
         setrlimit(RLIMIT_CPU, &lim);
     }
 
@@ -47,7 +94,6 @@ void set_resource_limit(const ResourceLimit &rl)
         lim.rlim_max = rl.file_limit.get_Byte();
         lim.rlim_cur = rl.file_limit.get_Byte();
         setrlimit(RLIMIT_FSIZE, &lim);
-        fprintf(stdout, "File limit set: %u MB\n", rl.file_limit.get_MB());
     }
 
     return ;
@@ -176,7 +222,7 @@ LangC::launch(Submission submit, ResourceLimit &rl)
 
 
         alarm(0);
-        alarm(rl.time_limit.get_second() * 5);
+        alarm(get_rl_cpu_second(rl) * 5);
         set_resource_limit(rl);
 
         ptrace(PTRACE_TRACEME, 0, NULL, NULL);
@@ -196,21 +242,25 @@ LangC::launch(Submission submit, ResourceLimit &rl)
         int stat;
         struct rusage rs_usg;
         size_t cur_memory_size = 0;
+        time_t time_left = get_rl_cpu_millisecond(rl);
+        int pagesize = getpagesize();
 
         while (1) {
             wait4(pid, &stat, 0, &rs_usg);
             
-            cur_memory_size    = rs_usg.ru_minflt * getpagesize() / 1024;
-            res.res_max_memory.set_Byte(
-                (res.res_max_memory.get_Byte() < cur_memory_size) ?
-                        (cur_memory_size) : (res.res_max_memory.get_Byte()));
+            if (rl.memory_limit.is_set()) {
+                //cur_memory_size    = rs_usg.ru_minflt * pagesize / 1024;
+                cur_memory_size = rs_usg.ru_minflt * pagesize >> 10;
 
-            if (rl.memory_limit.is_set() 
-                    && res.res_max_memory > rl.memory_limit) {
-                res.res_type    = NojRes_MemoryLimitExceed;
-                fprintf(stderr, "child killed by mem\n");
-                ptrace(PTRACE_KILL, pid, NULL, NULL);
-                break;
+                res.res_max_memory.set_Byte(
+                    (res.res_max_memory.get_Byte() < cur_memory_size) ?
+                        (cur_memory_size) : (res.res_max_memory.get_Byte()));
+                if (res.res_max_memory > rl.memory_limit) {
+                    res.res_type    = NojRes_MemoryLimitExceed;
+                    fprintf(stderr, "child killed by mem\n");
+                    ptrace(PTRACE_KILL, pid, NULL, NULL);
+                    break;
+                }
             }
             
             time_t total_time = 
@@ -219,8 +269,8 @@ LangC::launch(Submission submit, ResourceLimit &rl)
             
             res.res_elapsed_time.set_millisecond(total_time);
 
-            if (rl.time_limit.is_set()
-                    && res.res_elapsed_time > rl.time_limit) {
+            if (time_left > 0 
+                    && res.res_elapsed_time.get_millisecond() > time_left) {
                 res.res_type    = NojRes_TimeLimitExceed;
 
                 ptrace(PTRACE_KILL, pid, NULL, NULL);
@@ -248,6 +298,8 @@ LangC::launch(Submission submit, ResourceLimit &rl)
                 switch (signo) {
                     case SIGCHLD:
                     case SIGALRM:
+                        res.res_type = NojRes_TimeLimitExceed;
+                        break;
                     case SIGKILL:
                     case SIGXCPU:
                         res.res_type = NojRes_TimeLimitExceed;
@@ -279,7 +331,11 @@ LangC::launch(Submission submit, ResourceLimit &rl)
             
             ptrace(PTRACE_GETREGS, pid, NULL, &reg);
 
+#if (defined (__LP64__) || defined (__64BIT__) || defined (_LP64) || (__WORDSIZE == 64)) && not defined (__i386)
+            long syscall_id = reg.orig_rax;
+#else
             long syscall_id = reg.orig_eax;
+#endif
 
             //fprintf(stderr, 
                 //"child process made a system call %ld\n", syscall_id);
@@ -408,7 +464,7 @@ LangC::judge(Judge *jdg, Submission &submit)
 
     ResourceLimit rl_compile;
     rl_compile.rl_uid = jdg->get_uid();
-    rl_compile.time_limit.set_second(20);
+    rl_compile.single_time_limit.set_second(20);
     rl_compile.file_limit.set_MB(20);
     rl_compile.memory_limit.set_MB(100);
     rl_compile.set_workdir(path);
@@ -530,8 +586,6 @@ LangCDebug::compile(Submission submit, const ResourceLimit &rl)
 
     const char *compile_script_path = this->get_script_path();
 
-    fprintf(stdout, "Compile path:%s\n", compile_script_path);
-
     if (compile_script_path == NULL) {
         res.res_type = NojRes_SystemError;
         res.res_content = "Compile: Get compile script fail";
@@ -604,6 +658,7 @@ LangCDebug::compile(Submission submit, const ResourceLimit &rl)
 
 LangCRelease::LangCRelease()
 {
+    free(LangCDebug::compile_script_path);
     char *path = 
         ConfigManager::get_instance()->get_string("C_RELEASE_COMPILER");
     char *real_path = 
@@ -641,6 +696,7 @@ LangCRelease::judge(Judge *jdg, Submission &submit)
 
 LangCppDebug::LangCppDebug()
 {
+    free(LangCDebug::compile_script_path);
     char *path = 
         ConfigManager::get_instance()->get_string("CPP_DEBUG_COMPILER");
     char *real_path = 
@@ -674,6 +730,7 @@ LangCppDebug::judge(Judge *jdg, Submission &submit)
 
 LangCppRelease::LangCppRelease()
 {
+    free(LangCDebug::compile_script_path);
     char *path = 
         ConfigManager::get_instance()->get_string("CPP_RELEASE_COMPILER");
     char *real_path = 
@@ -704,3 +761,4 @@ LangCppRelease::judge(Judge *jdg, Submission &submit)
 {
     return LangCDebug::judge(jdg, submit);
 }
+

@@ -581,7 +581,7 @@ JudgeManager::fetch_problem_from_db( Problem::ID prob_id)
             prob.prob_id = prob_id;
             ResourceLimit rl;
             MYSQL_ROW row = mysql_fetch_row( res);
-            rl.time_limit.set_millisecond( strtoul( row[0], NULL, 10));
+            rl.single_time_limit.set_millisecond( strtoul( row[0], NULL, 10));
             rl.memory_limit.set_Byte( strtoul( row[1], NULL, 10));
             prob.prob_rsc_lim = rl;
 

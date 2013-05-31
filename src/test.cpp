@@ -97,7 +97,7 @@ void test_init()
     JudgeManager *jm = JudgeManager::get_instance();
 
     ResourceLimit rl;
-    rl.time_limit.set_second(1);
+    rl.single_time_limit.set_second(1);
     rl.memory_limit.set_MB(64);
     rl.file_limit.set_MB(2);
 
