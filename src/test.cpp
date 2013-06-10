@@ -1,3 +1,11 @@
+/******************************************
+ * 
+ * Author:  Laishzh
+ * File:    test.cpp
+ * Email:   laishengzhang(at)gmail.com 
+ * 
+ *******************************************/
+
 #include <iostream>
 #include <stdio.h>
 #include "../include/dataitem.h"

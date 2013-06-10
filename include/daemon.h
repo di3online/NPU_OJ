@@ -1,3 +1,11 @@
+/******************************************
+ * 
+ * Author:  Laishzh
+ * File:    daemon.h
+ * Email:   laishengzhang(at)gmail.com 
+ * 
+ *******************************************/
+
 #ifndef __DAEMON_INCLUDED
 #define __DAEMON_INCLUDED
 

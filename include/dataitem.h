@@ -1,3 +1,11 @@
+/******************************************
+ * 
+ * Author:  Laishzh
+ * File:    dataitem.h
+ * Email:   laishengzhang(at)gmail.com 
+ * 
+ *******************************************/
+
 #ifndef SUBMISSION_INCLUDE
 #define SUBMISSION_INCLUDE
 

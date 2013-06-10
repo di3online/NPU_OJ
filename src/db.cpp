@@ -1,3 +1,11 @@
+/******************************************
+ * 
+ * Author:  Laishzh
+ * File:    db.cpp
+ * Email:   laishengzhang(at)gmail.com 
+ * 
+ *******************************************/
+
 #include <string.h>
 #include <stdlib.h>
 #include <pthread.h>

@@ -1,3 +1,11 @@
+/******************************************
+ * 
+ * Author:  Laishzh
+ * File:    config.h
+ * Email:   laishengzhang(at)gmail.com 
+ * 
+ *******************************************/
+
 #ifndef __CONFIGMANAGER_INCLUDED_
 #define __CONFIGMANAGER_INCLUDED_
 

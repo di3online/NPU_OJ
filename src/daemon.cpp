@@ -1,3 +1,11 @@
+/******************************************
+ * 
+ * Author:  Laishzh
+ * File:    daemon.cpp
+ * Email:   laishengzhang(at)gmail.com 
+ * 
+ *******************************************/
+
 #include <unistd.h>
 #include <stdlib.h>
 #include <errno.h>

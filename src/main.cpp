@@ -1,3 +1,11 @@
+/******************************************
+ * 
+ * Author:  Laishzh
+ * File:    main.cpp
+ * Email:   laishengzhang(at)gmail.com 
+ * 
+ *******************************************/
+
 
 #include <iostream>
 #include <stdio.h>

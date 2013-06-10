@@ -1,3 +1,11 @@
+/******************************************
+ * 
+ * Author:  Laishzh
+ * File:    threadpool.cpp
+ * Email:   laishengzhang(at)gmail.com 
+ * 
+ *******************************************/
+
 
 #include "../include/threadpool.h"
 #include "../include/debug.h"

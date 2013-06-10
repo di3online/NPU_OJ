@@ -1,3 +1,11 @@
+/******************************************
+ * 
+ * Author:  Laishzh
+ * File:    lang.h
+ * Email:   laishengzhang(at)gmail.com 
+ * 
+ *******************************************/
+
 #ifndef _LANG_INCLUDED_
 #define _LANG_INCLUDED_
 

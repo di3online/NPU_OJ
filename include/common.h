@@ -1,3 +1,11 @@
+/******************************************
+ * 
+ * Author:  Laishzh
+ * File:    common.h
+ * Email:   laishengzhang(at)gmail.com 
+ * 
+ *******************************************/
+
 #ifndef NOJ_COMMON_INCLUDE
 #define NOJ_COMMON_INCLUDE
 

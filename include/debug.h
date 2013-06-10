@@ -1,3 +1,11 @@
+/******************************************
+ * 
+ * Author:  Laishzh
+ * File:    debug.h
+ * Email:   laishengzhang(at)gmail.com 
+ * 
+ *******************************************/
+
 #ifndef __NOJ_DEBUG_INCLUDE_
 #define __NOJ_DEBUG_INCLUDE_
 

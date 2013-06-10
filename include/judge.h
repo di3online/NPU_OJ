@@ -1,3 +1,11 @@
+/******************************************
+ * 
+ * Author:  Laishzh
+ * File:    judge.h
+ * Email:   laishengzhang(at)gmail.com 
+ * 
+ *******************************************/
+
 
 #ifndef __JUDGE_INCLUDED_
 #define __JUDGE_INCLUDED_

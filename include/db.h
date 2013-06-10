@@ -1,3 +1,11 @@
+/******************************************
+ * 
+ * Author:  Laishzh
+ * File:    db.h
+ * Email:   laishengzhang(at)gmail.com 
+ * 
+ *******************************************/
+
 #ifndef __DB_MANAGER_INCLUDED_
 #define __DB_MANAGER_INCLUDED_
 

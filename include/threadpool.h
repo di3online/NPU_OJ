@@ -1,3 +1,11 @@
+/******************************************
+ * 
+ * Author:  Laishzh
+ * File:    threadpool.h
+ * Email:   laishengzhang(at)gmail.com 
+ * 
+ *******************************************/
+
 #ifndef __THREAD_POOL_INCLUDE
 #define __THREAD_POOL_INCLUDE
 
